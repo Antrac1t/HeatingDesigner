@@ -1,0 +1,2076 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Návrh Otopné Soustavy</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #1a1f2e; color: #e0e4f0; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+#header { background: #12172a; border-bottom: 1px solid #2a3050; padding: 8px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+#header h1 { font-size: 15px; font-weight: 600; color: #7eb8f7; letter-spacing: 0.5px; }
+.header-btns { margin-left: auto; display: flex; gap: 8px; }
+.btn { padding: 6px 14px; border-radius: 6px; border: 1px solid #2a3050; background: #1e2540; color: #c0c8e8; font-size: 13px; cursor: pointer; transition: all 0.15s; }
+.btn:hover { background: #263060; border-color: #4a6abf; }
+.btn.primary { background: #2952a3; border-color: #4a72c3; color: #fff; }
+.btn.primary:hover { background: #3362b3; }
+.btn.danger { background: #7a1f1f; border-color: #aa3333; color: #ffc8c8; }
+
+#main { display: flex; flex: 1; overflow: hidden; }
+
+#sidebar { width: 220px; background: #12172a; border-right: 1px solid #2a3050; display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+#sidebar-inner { overflow-y: auto; flex: 1; padding: 8px; }
+#sidebar-inner::-webkit-scrollbar { width: 4px; }
+#sidebar-inner::-webkit-scrollbar-track { background: transparent; }
+#sidebar-inner::-webkit-scrollbar-thumb { background: #2a3050; border-radius: 2px; }
+
+.cat-header { font-size: 10px; font-weight: 700; color: #4a6abf; letter-spacing: 1.5px; text-transform: uppercase; padding: 10px 4px 4px; margin-top: 4px; }
+.cat-header:first-child { margin-top: 0; }
+
+.comp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 4px; }
+.comp-item { background: #1e2540; border: 1px solid #2a3050; border-radius: 6px; padding: 6px 4px; cursor: grab; text-align: center; transition: all 0.15s; user-select: none; }
+.comp-item:hover { background: #263060; border-color: #4a72c3; transform: translateY(-1px); }
+.comp-item:active { cursor: grabbing; }
+.comp-item svg { max-width: 36px; max-height: 36px; display: block; margin: 0 auto 4px; }
+.comp-item .name { font-size: 10px; color: #8090b8; line-height: 1.2; }
+
+.assembly-section { margin-top: 12px; border-top: 1px solid #2a3050; padding-top: 8px; }
+.assembly-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.assembly-item { background: #1e2540; border: 1px solid #4a72c3; border-radius: 4px; padding: 6px 8px; cursor: pointer; transition: all 0.15s; display: flex; justify-content: space-between; align-items: center; }
+.assembly-item:hover { background: #263060; }
+.assembly-item .name { font-size: 11px; color: #7eb8f7; }
+.assembly-item .count { font-size: 9px; color: #8090b8; }
+.assembly-btns { display: flex; gap: 4px; }
+.assembly-btns button { padding: 2px 6px; font-size: 10px; border-radius: 3px; border: 1px solid #2a3050; background: #12172a; color: #c0c8e8; cursor: pointer; }
+.assembly-btns button:hover { background: #1e2540; }
+
+#canvas-wrap { flex: 1; position: relative; overflow: hidden; background: #1a1f2e; }
+#canvas { position: absolute; top: 0; left: 0; z-index: 2; }
+#grid-canvas { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1; }
+
+/* SVG overlay: fixed over canvas-wrap, no transform */
+#connections {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 3;
+  pointer-events: none;
+  overflow: visible;
+}
+#connections path, #connections circle { pointer-events: auto; }
+#connections text { pointer-events: none; }
+
+#right-panel { width: 280px; background: #12172a; border-left: 1px solid #2a3050; display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+#right-panel h3 { font-size: 11px; font-weight: 700; color: #4a6abf; letter-spacing: 1.5px; text-transform: uppercase; padding: 12px 12px 8px; border-bottom: 1px solid #2a3050; }
+#props-inner { padding: 12px; overflow-y: auto; flex: 1; }
+#props-inner::-webkit-scrollbar { width: 4px; }
+#props-inner::-webkit-scrollbar-thumb { background: #2a3050; border-radius: 2px; }
+.prop-row { margin-bottom: 10px; }
+.prop-label { font-size: 11px; color: #6878a8; margin-bottom: 4px; }
+.prop-input { width: 100%; background: #1a1f2e; border: 1px solid #2a3050; border-radius: 5px; padding: 5px 8px; color: #c0c8e8; font-size: 13px; outline: none; }
+.prop-input:focus { border-color: #4a72c3; }
+.prop-select { width: 100%; background: #1a1f2e; border: 1px solid #2a3050; border-radius: 5px; padding: 5px 8px; color: #c0c8e8; font-size: 13px; outline: none; cursor: pointer; }
+.prop-select option { background: #1a1f2e; }
+.no-sel { color: #4a5580; font-size: 12px; padding: 8px 0; text-align: center; margin-top: 20px; }
+
+#bom-panel { margin-top: auto; border-top: 1px solid #2a3050; }
+#bom-toggle { padding: 10px 12px; font-size: 11px; color: #4a6abf; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+#bom-toggle:hover { background: #1a1f2e; }
+#bom-list { padding: 0 12px 12px; max-height: 200px; overflow-y: auto; display: none; }
+#bom-list.open { display: block; }
+.bom-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; border-bottom: 1px solid #1e2540; color: #8090b8; }
+.bom-row .bom-name { color: #b0bce0; }
+
+.canvas-el { position: absolute; cursor: move; user-select: none; pointer-events: none; }
+.canvas-el:hover { z-index: 90 !important; }
+.canvas-el.selected { outline: 3px solid #4a72c3; outline-offset: 2px; z-index: 95 !important; }
+.canvas-el.multi-selected { outline: 3px solid #7eb8f7; outline-offset: 2px; background: rgba(126, 184, 247, 0.1); }
+.el-box { display: flex; flex-direction: column; align-items: center; position: relative; pointer-events: none; }
+.el-box.tank { background: #1e2540; border: 1px solid #2a3050; border-radius: 8px; padding: 8px; min-width: 70px; max-width: 90px; pointer-events: all; }
+.el-svg-wrap { position: relative; pointer-events: none; }
+.el-svg-wrap svg { display: block; pointer-events: all; }
+.el-label-wrap { background: #1e2540; border-radius: 6px; padding: 4px 8px; margin-bottom: 24px; display: inline-flex; flex-direction: column; align-items: center; gap: 2px; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+.canvas-el:hover .el-label-wrap { opacity: 1; }
+.el-label { font-size: 11px; color: #8090b8; text-align: center; white-space: nowrap; }
+.el-dn { font-size: 10px; color: #4a72c3; font-weight: 700; }
+.el-note { font-size: 10px; color: #6878a8; text-align: center; max-width: 100px; font-style: italic; }
+.el-checkbox { position: absolute; top: -8px; left: -8px; width: 18px; height: 18px; background: #1e2540; border: 2px solid #4a72c3; border-radius: 4px; display: none; align-items: center; justify-content: center; cursor: pointer; pointer-events: none; }
+.canvas-el:hover .el-checkbox, .canvas-el.selected .el-checkbox, .canvas-el.multi-selected .el-checkbox { display: flex; }
+.el-checkbox:hover { pointer-events: all; }
+.el-checkbox.checked { background: #4a72c3; }
+.el-checkbox.checked::after { content: '✓'; color: #fff; font-size: 12px; font-weight: bold; }
+
+#toolbar { background: #12172a; border-top: 1px solid #2a3050; padding: 6px 16px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; font-size: 12px; color: #4a5580; }
+#info-bar { font-size: 11px; color: #4a5580; }
+#zoom-level { margin-left: auto; }
+
+.pipe-el { position: absolute; cursor: move; }
+.pipe-body { height: 10px; border-radius: 5px; position: relative; }
+.pipe-label { font-size: 10px; color: #6878a8; text-align: center; margin-top: 3px; white-space: nowrap; }
+
+.conn-btn { padding: 5px 10px; border-radius: 5px; border: 1px solid #2a6a4a; background: #1a3a2a; color: #5abb8a; font-size: 12px; cursor: pointer; transition: all 0.15s; }
+.conn-btn:hover, .conn-btn.active { background: #2a5a3a; border-color: #5abb8a; }
+
+/* Path nodes stay in viewport space */
+.path-node { width: 8px; height: 8px; background: #5abb8a; border: 2px solid #1a3a2a; border-radius: 50%; position: absolute; cursor: move; z-index: 15; transform: translate(-50%, -50%); }
+.path-node:hover { transform: translate(-50%, -50%) scale(1.5); background: #7fd0aa; }
+
+.conn-port { width: 10px; height: 10px; background: #4a72c3; border: 2px solid #1a1f2e; border-radius: 50%; position: absolute; cursor: crosshair; z-index: 200; transform: translate(-50%, -50%); transition: all 0.15s; pointer-events: none; }
+.canvas-el:hover .conn-port { pointer-events: all; }
+.el-box.tank:hover .conn-port { pointer-events: all; }
+body.drawing-mode .conn-port { pointer-events: all; }
+.conn-port:hover { background: #7eb8f7; transform: translate(-50%, -50%) scale(1.4); border-color: #5abb8a; box-shadow: 0 0 10px #7eb8f7; }
+
+#context-menu { position: fixed; background: #1e2540; border: 1px solid #4a72c3; border-radius: 6px; padding: 4px; z-index: 1000; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+#context-menu .menu-item { padding: 8px 16px; cursor: pointer; font-size: 12px; color: #c0c8e8; border-radius: 4px; white-space: nowrap; }
+#context-menu .menu-item:hover { background: #263060; color: #7eb8f7; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 7h18M3 12h18M3 17h18" stroke="#7eb8f7" stroke-width="2" stroke-linecap="round"/></svg>
+  <h1>Návrh Otopné Soustavy</h1>
+  <div class="header-btns">
+    <button class="btn" onclick="exportJSON()">💾 Uložit</button>
+    <button class="btn" onclick="importJSON()">📂 Načíst</button>
+    <button class="btn danger" onclick="clearAll()">🗑 Vymazat vše</button>
+  </div>
+</div>
+
+<div id="main">
+  <div id="sidebar">
+    <div id="sidebar-inner">
+      <div class="assembly-section">
+        <div class="cat-header">Sestavy</div>
+        <div id="assembly-list" class="assembly-list"></div>
+      </div>
+      <div class="cat-header">Fitinky</div>
+      <div class="comp-grid" id="fittings-grid"></div>
+      <div class="cat-header">Komponenty</div>
+      <div class="comp-grid" id="components-grid"></div>
+    </div>
+  </div>
+
+  <div id="canvas-wrap">
+    <canvas id="grid-canvas"></canvas>
+    <svg id="connections"></svg>
+    <div id="canvas"></div>
+  </div>
+
+  <div id="right-panel">
+    <h3>Vlastnosti</h3>
+    <div id="props-inner">
+      <div class="no-sel">Vyberte prvek pro editaci</div>
+    </div>
+    <div id="bom-panel">
+      <div id="bom-toggle" onclick="toggleBOM()">
+        <span>Kusovník</span><span id="bom-arrow">▲</span>
+      </div>
+      <div id="bom-list"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toolbar">
+  <button class="conn-btn" id="draw-btn" onclick="toggleDrawMode()" style="display:none">✕ Zrušit kreslení</button>
+  <span id="info-bar">Klikněte na modrý port pro kreslení | ☑ Zaškrtněte komponenty → pravé tlačítko → Vytvořit sestavu | Shift = rovné čáry</span>
+  <span id="zoom-level">Zoom: 100%</span>
+</div>
+
+<input type="file" id="file-input" style="display:none" accept=".json" onchange="loadFile(event)">
+
+<script>
+const SVGS = {
+  'koleno': `<svg viewBox="0 0 48 48"><path d="M8 8 L8 32 Q8 40 16 40 L40 40" stroke="#7eb8f7" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="8" cy="8" r="3" fill="#4a72c3"/><circle cx="40" cy="40" r="3" fill="#4a72c3"/></svg>`,
+  'kriz': `<svg viewBox="0 0 48 48"><line x1="24" y1="4" x2="24" y2="44" stroke="#7eb8f7" stroke-width="3"/><line x1="4" y1="24" x2="44" y2="24" stroke="#7eb8f7" stroke-width="3"/><circle cx="24" cy="4" r="3" fill="#4a72c3"/><circle cx="24" cy="44" r="3" fill="#4a72c3"/><circle cx="4" cy="24" r="3" fill="#4a72c3"/><circle cx="44" cy="24" r="3" fill="#4a72c3"/></svg>`,
+  'natrubek': `<svg viewBox="0 0 48 48"><rect x="10" y="18" width="28" height="12" rx="6" fill="none" stroke="#7eb8f7" stroke-width="2.5"/><line x1="4" y1="24" x2="10" y2="24" stroke="#7eb8f7" stroke-width="3"/><line x1="38" y1="24" x2="44" y2="24" stroke="#7eb8f7" stroke-width="3"/></svg>`,
+  'redukce': `<svg viewBox="0 0 48 48"><path d="M4 16 L22 20 L22 28 L4 32 Z" fill="none" stroke="#7eb8f7" stroke-width="2.5"/><path d="M22 20 L44 22 L44 26 L22 28 Z" fill="none" stroke="#7eb8f7" stroke-width="2.5"/></svg>`,
+  'sroubeni': `<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="10" fill="none" stroke="#7eb8f7" stroke-width="2.5"/><line x1="4" y1="24" x2="14" y2="24" stroke="#7eb8f7" stroke-width="3"/><line x1="34" y1="24" x2="44" y2="24" stroke="#7eb8f7" stroke-width="3"/><path d="M18 18 L30 18 L30 30 L18 30" stroke="#4a72c3" stroke-width="1.5" fill="none"/></svg>`,
+  'tkus': `<svg viewBox="0 0 48 48"><line x1="4" y1="24" x2="44" y2="24" stroke="#7eb8f7" stroke-width="3"/><line x1="24" y1="24" x2="24" y2="44" stroke="#7eb8f7" stroke-width="3"/><circle cx="4" cy="24" r="3" fill="#4a72c3"/><circle cx="44" cy="24" r="3" fill="#4a72c3"/><circle cx="24" cy="44" r="3" fill="#4a72c3"/></svg>`,
+  'tkus-red': `<svg viewBox="0 0 48 48"><line x1="4" y1="24" x2="44" y2="24" stroke="#7eb8f7" stroke-width="3"/><line x1="24" y1="24" x2="24" y2="44" stroke="#7eb8f7" stroke-width="2"/><path d="M20 28 L28 28 L26 40 L22 40 Z" fill="none" stroke="#5abb8a" stroke-width="1.5"/><circle cx="4" cy="24" r="3" fill="#4a72c3"/><circle cx="44" cy="24" r="3" fill="#4a72c3"/></svg>`,
+  'vicko': `<svg viewBox="0 0 48 48"><line x1="4" y1="24" x2="36" y2="24" stroke="#7eb8f7" stroke-width="3"/><rect x="36" y="16" width="8" height="16" rx="2" fill="#4a72c3"/></svg>`,
+  'vsuvka': `<svg viewBox="0 0 48 48"><line x1="4" y1="24" x2="44" y2="24" stroke="#7eb8f7" stroke-width="3"/><rect x="16" y="18" width="16" height="12" rx="3" fill="none" stroke="#5abb8a" stroke-width="2"/></svg>`,
+  'vsuvka-red': `<svg viewBox="0 0 48 48"><path d="M4 22 L16 18 L32 20 L44 22" stroke="#7eb8f7" stroke-width="3" fill="none"/><path d="M4 26 L16 30 L32 28 L44 26" stroke="#7eb8f7" stroke-width="3" fill="none"/><rect x="16" y="18" width="16" height="12" rx="3" fill="none" stroke="#5abb8a" stroke-width="1.5"/></svg>`,
+  'zatka': `<svg viewBox="0 0 48 48"><line x1="4" y1="24" x2="30" y2="24" stroke="#7eb8f7" stroke-width="3"/><circle cx="36" cy="24" r="8" fill="#1e2540" stroke="#4a72c3" stroke-width="2.5"/><line x1="32" y1="20" x2="40" y2="28" stroke="#4a72c3" stroke-width="2"/><line x1="40" y1="20" x2="32" y2="28" stroke="#4a72c3" stroke-width="2"/></svg>`,
+  'alpex-sroubeni': `<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="10" fill="none" stroke="#3a6aa0" stroke-width="2.5"/><line x1="4" y1="24" x2="14" y2="24" stroke="#3a6aa0" stroke-width="3"/><line x1="34" y1="24" x2="44" y2="24" stroke="#3a6aa0" stroke-width="3"/><path d="M18 18 L30 18 L30 30 L18 30" stroke="#5a9ad0" stroke-width="1.5" fill="none"/><circle cx="24" cy="24" r="3" fill="none" stroke="#5a9ad0" stroke-width="1.5"/></svg>`,
+  'alpex-lisovaci': `<svg viewBox="0 0 48 48"><line x1="4" y1="24" x2="44" y2="24" stroke="#3a6aa0" stroke-width="3"/><polygon points="24,14 30,18 30,30 24,34 18,30 18,18" fill="none" stroke="#3a6aa0" stroke-width="2.5"/><circle cx="4" cy="24" r="2" fill="#3a6aa0"/><circle cx="44" cy="24" r="2" fill="#3a6aa0"/></svg>`,
+  'zpetna-klapka': `<svg viewBox="0 0 48 48"><line x1="4" y1="24" x2="44" y2="24" stroke="#5abb8a" stroke-width="3"/><rect x="16" y="12" width="16" height="12" fill="#ddd" stroke="#5abb8a" stroke-width="2"/><polygon points="16,12 32,12 32,24" fill="#888" stroke="#5abb8a" stroke-width="1"/><circle cx="4" cy="24" r="2" fill="#5abb8a"/><circle cx="44" cy="24" r="2" fill="#5abb8a"/></svg>`,
+  'zpetny-ventil': `<svg viewBox="0 0 48 48"><line x1="4" y1="24" x2="44" y2="24" stroke="#5abb8a" stroke-width="3"/><polygon points="16,12 32,24 16,36" fill="#888" stroke="#5abb8a" stroke-width="2"/><line x1="32" y1="12" x2="32" y2="36" stroke="#5abb8a" stroke-width="2"/><circle cx="4" cy="24" r="2" fill="#5abb8a"/><circle cx="44" cy="24" r="2" fill="#5abb8a"/></svg>`,
+  'rohovy-ventil': `<svg viewBox="0 0 48 48"><line x1="4" y1="24" x2="18" y2="24" stroke="#5abb8a" stroke-width="3"/><line x1="24" y1="24" x2="24" y2="44" stroke="#5abb8a" stroke-width="3"/><polygon points="12,16 24,8 36,16 24,34" fill="none" stroke="#5abb8a" stroke-width="2"/><line x1="24" y1="4" x2="24" y2="8" stroke="#5abb8a" stroke-width="2"/><circle cx="4" cy="24" r="2" fill="#5abb8a"/><circle cx="24" cy="44" r="2" fill="#5abb8a"/></svg>`,
+  'uzaviraci-shoupe': `<svg viewBox="0 0 48 48"><line x1="4" y1="24" x2="44" y2="24" stroke="#5abb8a" stroke-width="3"/><polygon points="16,8 32,8 32,40 16,40" fill="none" stroke="#5abb8a" stroke-width="2"/><line x1="16" y1="8" x2="32" y2="40" stroke="#5abb8a" stroke-width="2"/><line x1="32" y1="8" x2="16" y2="40" stroke="#5abb8a" stroke-width="2"/><circle cx="4" cy="24" r="2" fill="#5abb8a"/><circle cx="44" cy="24" r="2" fill="#5abb8a"/></svg>`,
+  'vypousteni': `<svg viewBox="0 0 48 48"><line x1="4" y1="16" x2="44" y2="16" stroke="#5abb8a" stroke-width="3"/><line x1="24" y1="16" x2="24" y2="32" stroke="#5abb8a" stroke-width="3"/><line x1="14" y1="32" x2="34" y2="32" stroke="#5abb8a" stroke-width="3"/><line x1="14" y1="38" x2="34" y2="38" stroke="#5abb8a" stroke-width="2"/><circle cx="24" cy="16" r="2" fill="#5abb8a"/></svg>`,
+  'odvzdusnovaci': `<svg viewBox="0 0 48 48"><line x1="24" y1="4" x2="24" y2="20" stroke="#5abb8a" stroke-width="2"/><line x1="14" y1="20" x2="34" y2="20" stroke="#5abb8a" stroke-width="3"/><line x1="4" y1="28" x2="44" y2="28" stroke="#5abb8a" stroke-width="3"/><line x1="14" y1="36" x2="34" y2="36" stroke="#5abb8a" stroke-width="2"/><circle cx="24" cy="28" r="2" fill="#5abb8a"/></svg>`,
+  'odvzdusnovaci-auto': `<svg viewBox="0 0 48 48"><rect x="18" y="4" width="12" height="14" fill="none" stroke="#5abb8a" stroke-width="2"/><line x1="24" y1="18" x2="24" y2="28" stroke="#5abb8a" stroke-width="2"/><line x1="4" y1="32" x2="44" y2="32" stroke="#5abb8a" stroke-width="3"/><line x1="14" y1="40" x2="34" y2="40" stroke="#5abb8a" stroke-width="2"/><circle cx="24" cy="32" r="2" fill="#5abb8a"/></svg>`,
+  'pojistny-ventil': `<svg viewBox="0 0 48 48"><line x1="4" y1="24" x2="44" y2="24" stroke="#e24b4a" stroke-width="3"/><polygon points="14,14 34,14 34,34 14,34" fill="none" stroke="#e24b4a" stroke-width="2"/><line x1="14" y1="14" x2="34" y2="34" stroke="#e24b4a" stroke-width="2"/><polygon points="20,4 28,4 28,12 20,12" fill="none" stroke="#e24b4a" stroke-width="1.5"/><line x1="24" y1="12" x2="24" y2="14" stroke="#e24b4a" stroke-width="1.5"/><line x1="16" y1="40" x2="32" y2="40" stroke="#e24b4a" stroke-width="2"/><circle cx="4" cy="24" r="2" fill="#e24b4a"/><circle cx="44" cy="24" r="2" fill="#e24b4a"/></svg>`,
+  'pojistny-ventil-rohovy': `<svg viewBox="0 0 48 48"><line x1="4" y1="24" x2="18" y2="24" stroke="#e24b4a" stroke-width="3"/><line x1="24" y1="24" x2="24" y2="44" stroke="#e24b4a" stroke-width="3"/><polygon points="12,14 36,14 36,34 12,34" fill="none" stroke="#e24b4a" stroke-width="2"/><line x1="12" y1="14" x2="36" y2="34" stroke="#e24b4a" stroke-width="2"/><polygon points="20,2 28,2 28,10 20,10" fill="none" stroke="#e24b4a" stroke-width="1.5"/><line x1="24" y1="10" x2="24" y2="14" stroke="#e24b4a" stroke-width="1.5"/><circle cx="4" cy="24" r="2" fill="#e24b4a"/><circle cx="24" cy="44" r="2" fill="#e24b4a"/></svg>`,
+  'kulovy-kohout-vypousteci': `<svg viewBox="0 0 48 48"><line x1="4" y1="16" x2="44" y2="16" stroke="#5abb8a" stroke-width="3"/><polygon points="16,8 32,8 32,24 16,24" fill="none" stroke="#5abb8a" stroke-width="2"/><line x1="24" y1="8" x2="16" y2="24" stroke="#5abb8a" stroke-width="2"/><line x1="24" y1="8" x2="32" y2="24" stroke="#5abb8a" stroke-width="2"/><line x1="24" y1="24" x2="24" y2="36" stroke="#5abb8a" stroke-width="2"/><line x1="18" y1="36" x2="30" y2="36" stroke="#5abb8a" stroke-width="2"/><circle cx="24" cy="16" r="2" fill="#5abb8a"/></svg>`,
+  'kulovy-kohout-hadice': `<svg viewBox="0 0 48 48"><line x1="4" y1="16" x2="24" y2="16" stroke="#5abb8a" stroke-width="3"/><line x1="24" y1="16" x2="24" y2="8" stroke="#5abb8a" stroke-width="2"/><polygon points="14,8 34,8 34,24 14,24" fill="none" stroke="#5abb8a" stroke-width="2"/><line x1="24" y1="24" x2="24" y2="40" stroke="#5abb8a" stroke-width="2"/><path d="M24,40 Q36,40 40,46" fill="none" stroke="#5abb8a" stroke-width="2"/><circle cx="4" cy="16" r="2" fill="#5abb8a"/></svg>`,
+  'filtr': `<svg viewBox="0 0 48 48"><line x1="4" y1="24" x2="44" y2="24" stroke="#7eb8f7" stroke-width="3"/><line x1="20" y1="24" x2="20" y2="14" stroke="#7eb8f7" stroke-width="2"/><line x1="20" y1="14" x2="34" y2="14" stroke="#7eb8f7" stroke-width="2"/><line x1="34" y1="14" x2="34" y2="24" stroke="#7eb8f7" stroke-width="2"/><circle cx="4" cy="24" r="2" fill="#7eb8f7"/><circle cx="44" cy="24" r="2" fill="#7eb8f7"/></svg>`,
+  'vodomer': `<svg viewBox="0 0 48 48"><line x1="4" y1="24" x2="44" y2="24" stroke="#7eb8f7" stroke-width="3"/><circle cx="24" cy="24" r="12" fill="none" stroke="#7eb8f7" stroke-width="2"/><line x1="14" y1="12" x2="34" y2="36" stroke="#7eb8f7" stroke-width="2"/><circle cx="4" cy="24" r="2" fill="#7eb8f7"/><circle cx="44" cy="24" r="2" fill="#7eb8f7"/></svg>`,
+  'teplomer': `<svg viewBox="0 0 36 48"><circle cx="18" cy="38" r="7" fill="none" stroke="#7eb8f7" stroke-width="2"/><rect x="15" y="8" width="6" height="30" rx="3" fill="none" stroke="#7eb8f7" stroke-width="2"/><circle cx="18" cy="42" r="2" fill="#7eb8f7"/></svg>`,
+  'manometr': `<svg viewBox="0 0 36 48"><circle cx="18" cy="24" r="14" fill="none" stroke="#7eb8f7" stroke-width="2"/><circle cx="18" cy="24" r="3" fill="#7eb8f7"/><line x1="18" y1="24" x2="18" y2="14" stroke="#7eb8f7" stroke-width="2"/><line x1="4" y1="42" x2="32" y2="42" stroke="#7eb8f7" stroke-width="1.5"/><line x1="18" y1="38" x2="18" y2="42" stroke="#7eb8f7" stroke-width="1.5"/><circle cx="18" cy="42" r="2" fill="#7eb8f7"/></svg>`,
+  'cerpadlo': `<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="14" fill="none" stroke="#f7c77e" stroke-width="2.5"/><path d="M16 16 L28 24 L16 32" fill="#f7c77e"/><line x1="4" y1="24" x2="10" y2="24" stroke="#f7c77e" stroke-width="3"/><line x1="38" y1="24" x2="44" y2="24" stroke="#f7c77e" stroke-width="3"/></svg>`,
+  'kulovy-ventil': `<svg viewBox="0 0 48 48"><line x1="4" y1="24" x2="14" y2="24" stroke="#5abb8a" stroke-width="3"/><line x1="34" y1="24" x2="44" y2="24" stroke="#5abb8a" stroke-width="3"/><circle cx="24" cy="24" r="10" fill="none" stroke="#5abb8a" stroke-width="2.5"/><line x1="24" y1="4" x2="24" y2="14" stroke="#5abb8a" stroke-width="2.5"/><rect x="20" y="2" width="8" height="4" rx="1" fill="#5abb8a"/><circle cx="4" cy="24" r="2" fill="#5abb8a"/><circle cx="44" cy="24" r="2" fill="#5abb8a"/></svg>`,
+  'trojcestny': `<svg viewBox="0 0 48 48"><line x1="4" y1="24" x2="14" y2="24" stroke="#bb7af7" stroke-width="3"/><line x1="34" y1="24" x2="44" y2="24" stroke="#bb7af7" stroke-width="3"/><line x1="24" y1="34" x2="24" y2="44" stroke="#bb7af7" stroke-width="3"/><polygon points="14,14 34,14 34,34 14,34" fill="none" stroke="#bb7af7" stroke-width="2.5"/><circle cx="24" cy="24" r="5" fill="#bb7af7" opacity="0.5"/><circle cx="4" cy="24" r="2" fill="#bb7af7"/><circle cx="44" cy="24" r="2" fill="#bb7af7"/><circle cx="24" cy="44" r="2" fill="#bb7af7"/></svg>`,
+  'mag-filtr': `<svg viewBox="0 0 48 48"><line x1="4" y1="24" x2="44" y2="24" stroke="#7eb8f7" stroke-width="3"/><rect x="14" y="14" width="20" height="20" rx="4" fill="none" stroke="#7eb8f7" stroke-width="2"/><text x="24" y="28" text-anchor="middle" fill="#7eb8f7" font-size="12" font-weight="bold">M</text><path d="M20 34 L24 42 L28 34" fill="#e24b4a" stroke="none"/><circle cx="4" cy="24" r="2" fill="#7eb8f7"/><circle cx="44" cy="24" r="2" fill="#7eb8f7"/></svg>`,
+  'otopne-teleso': `<svg viewBox="0 0 60 32"><rect x="4" y="8" width="52" height="16" fill="none" stroke="#e24b4a" stroke-width="2.5" rx="2"/><circle cx="4" cy="16" r="2" fill="#e24b4a"/><circle cx="56" cy="16" r="2" fill="#e24b4a"/></svg>`,
+  'registr': `<svg viewBox="0 0 60 24"><line x1="4" y1="12" x2="56" y2="12" stroke="#e24b4a" stroke-width="4"/><circle cx="14" cy="12" r="6" fill="#e24b4a"/><circle cx="46" cy="12" r="6" fill="#e24b4a"/><circle cx="4" cy="12" r="2" fill="#e24b4a"/><circle cx="56" cy="12" r="2" fill="#e24b4a"/></svg>`,
+  'konvektor': `<svg viewBox="0 0 60 28"><rect x="4" y="6" width="52" height="16" fill="none" stroke="#e24b4a" stroke-width="2"/><line x1="10" y1="6" x2="10" y2="22" stroke="#e24b4a" stroke-width="1.5"/><line x1="18" y1="6" x2="18" y2="22" stroke="#e24b4a" stroke-width="1.5"/><line x1="26" y1="6" x2="26" y2="22" stroke="#e24b4a" stroke-width="1.5"/><line x1="34" y1="6" x2="34" y2="22" stroke="#e24b4a" stroke-width="1.5"/><line x1="42" y1="6" x2="42" y2="22" stroke="#e24b4a" stroke-width="1.5"/><line x1="50" y1="6" x2="50" y2="22" stroke="#e24b4a" stroke-width="1.5"/><circle cx="4" cy="14" r="2" fill="#e24b4a"/><circle cx="56" cy="14" r="2" fill="#e24b4a"/></svg>`,
+  'podlahove-topeni-spirala': `<svg viewBox="0 0 80 80"><path d="M 8,72 L 72,72 L 72,8 L 8,8 L 8,65 L 65,65 L 65,15 L 15,15 L 15,58 L 58,58 L 58,22 L 22,22 L 22,51 L 51,51 L 51,29 L 29,29 L 29,44 L 44,44 L 44,36 L 40,36" fill="none" stroke="#e24b4a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="72" r="3" fill="#e24b4a"/></svg>`,
+  'podlahove-topeni-meandr': `<svg viewBox="0 0 70 70"><path d="M 4 35 L 10 35 L 10 8 L 18 8 L 18 62 L 26 62 L 26 8 L 34 8 L 34 62 L 42 62 L 42 8 L 50 8 L 50 62 L 58 62 L 58 35 L 66 35" fill="none" stroke="#e24b4a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4" cy="35" r="2.5" fill="#e24b4a"/><circle cx="66" cy="35" r="2.5" fill="#e24b4a"/></svg>`,
+  'radiator': `<svg viewBox="0 0 60 40"><rect x="8" y="6" width="44" height="28" fill="none" stroke="#e24b4a" stroke-width="2" rx="2"/><line x1="12" y1="6" x2="12" y2="34" stroke="#e24b4a" stroke-width="3"/><line x1="16" y1="6" x2="16" y2="34" stroke="#e24b4a" stroke-width="3"/><line x1="20" y1="6" x2="20" y2="34" stroke="#e24b4a" stroke-width="3"/><line x1="24" y1="6" x2="24" y2="34" stroke="#e24b4a" stroke-width="3"/><line x1="28" y1="6" x2="28" y2="34" stroke="#e24b4a" stroke-width="3"/><line x1="32" y1="6" x2="32" y2="34" stroke="#e24b4a" stroke-width="3"/><line x1="36" y1="6" x2="36" y2="34" stroke="#e24b4a" stroke-width="3"/><line x1="40" y1="6" x2="40" y2="34" stroke="#e24b4a" stroke-width="3"/><line x1="44" y1="6" x2="44" y2="34" stroke="#e24b4a" stroke-width="3"/><line x1="48" y1="6" x2="48" y2="34" stroke="#e24b4a" stroke-width="3"/><circle cx="4" cy="20" r="2" fill="#e24b4a"/><circle cx="56" cy="20" r="2" fill="#e24b4a"/></svg>`,
+  'akumul': `<svg viewBox="0 0 48 48"><rect x="12" y="6" width="24" height="36" rx="5" fill="none" stroke="#7eb8f7" stroke-width="2.5"/><ellipse cx="24" cy="6" rx="12" ry="3" fill="none" stroke="#7eb8f7" stroke-width="2"/><ellipse cx="24" cy="42" rx="12" ry="3" fill="none" stroke="#7eb8f7" stroke-width="2"/><text x="24" y="27" text-anchor="middle" fill="#4a5580" font-size="9">AKU</text></svg>`,
+  'tuv': `<svg viewBox="0 0 48 48"><rect x="12" y="6" width="24" height="36" rx="5" fill="none" stroke="#7eb8f7" stroke-width="2.5"/><ellipse cx="24" cy="6" rx="12" ry="3" fill="none" stroke="#7eb8f7" stroke-width="2"/><ellipse cx="24" cy="42" rx="12" ry="3" fill="none" stroke="#7eb8f7" stroke-width="2"/><text x="24" y="27" text-anchor="middle" fill="#4a5580" font-size="9">TUV</text></svg>`,
+  'podlahovy-rozdelovac': `<svg viewBox="0 0 70 100"><line x1="35" y1="5" x2="35" y2="95" stroke="#7eb8f7" stroke-width="8" stroke-linecap="round"/><line x1="35" y1="0" x2="35" y2="5" stroke="#e24b4a" stroke-width="4" stroke-linecap="round"/><line x1="35" y1="95" x2="35" y2="100" stroke="#4a72c3" stroke-width="4" stroke-linecap="round"/></svg>`,
+  'tepelne-cerpadlo': `<svg viewBox="0 0 60 48"><rect x="6" y="8" width="48" height="32" rx="4" fill="none" stroke="#5abb8a" stroke-width="2.5"/><circle cx="18" cy="42" r="2" fill="#e24b4a"/><circle cx="42" cy="42" r="2" fill="#4a72c3"/><text x="30" y="28" text-anchor="middle" fill="#5abb8a" font-size="11" font-weight="bold">TČ</text></svg>`,
+  'plynovy-kotel': `<svg viewBox="0 0 60 48"><rect x="6" y="8" width="48" height="32" rx="4" fill="none" stroke="#f7c77e" stroke-width="2.5"/><circle cx="18" cy="42" r="2" fill="#e24b4a"/><circle cx="42" cy="42" r="2" fill="#4a72c3"/><text x="30" y="28" text-anchor="middle" fill="#f7c77e" font-size="9" font-weight="bold">PLYN</text></svg>`,
+  'kotel-tuha-paliva': `<svg viewBox="0 0 60 48"><rect x="6" y="8" width="48" height="32" rx="4" fill="none" stroke="#e24b4a" stroke-width="2.5"/><circle cx="18" cy="42" r="2" fill="#e24b4a"/><circle cx="42" cy="42" r="2" fill="#4a72c3"/><text x="30" y="24" text-anchor="middle" fill="#e24b4a" font-size="8" font-weight="bold">TUHÁ</text><text x="30" y="32" text-anchor="middle" fill="#e24b4a" font-size="8" font-weight="bold">PALIVA</text></svg>`,
+  'solarni-kolektor': `<svg viewBox="0 0 60 48"><rect x="6" y="8" width="48" height="32" rx="4" fill="none" stroke="#f7c77e" stroke-width="2.5"/><circle cx="18" cy="42" r="2" fill="#e24b4a"/><circle cx="42" cy="42" r="2" fill="#4a72c3"/><text x="30" y="28" text-anchor="middle" fill="#f7c77e" font-size="9" font-weight="bold">SOLÁR</text></svg>`,
+  'vlnovec': `<svg viewBox="0 0 60 32"><path d="M 4 16 Q 10 8, 16 16 T 28 16 T 40 16 T 52 16 L 56 16" fill="none" stroke="#7eb8f7" stroke-width="2.5"/><circle cx="4" cy="16" r="2" fill="#7eb8f7"/><circle cx="56" cy="16" r="2" fill="#7eb8f7"/></svg>`,
+};
+
+const DN_OPTIONS = ['DN15','DN20','DN25','DN32','DN40','DN50','DN65','DN80','DN100'];
+
+const SVG_SIZES = {
+  'koleno': {w:48,h:48}, 'kriz': {w:48,h:48}, 'natrubek': {w:48,h:48}, 'redukce': {w:48,h:48},
+  'sroubeni': {w:48,h:48}, 'tkus': {w:48,h:48}, 'tkus-red': {w:48,h:48}, 'vicko': {w:48,h:48},
+  'vsuvka': {w:48,h:48}, 'vsuvka-red': {w:48,h:48}, 'zatka': {w:48,h:48},
+  'alpex-sroubeni': {w:48,h:48}, 'alpex-lisovaci': {w:48,h:48},
+  'cerpadlo': {w:48,h:48}, 'kulovy-ventil': {w:48,h:48}, 'trojcestny': {w:48,h:48},
+  'mag-filtr': {w:48,h:48}, 'zpetna-klapka': {w:48,h:48}, 'zpetny-ventil': {w:48,h:48},
+  'rohovy-ventil': {w:48,h:48}, 'uzaviraci-shoupe': {w:48,h:48}, 'vypousteni': {w:48,h:48},
+  'odvzdusnovaci': {w:48,h:48}, 'odvzdusnovaci-auto': {w:48,h:48},
+  'pojistny-ventil': {w:48,h:48}, 'pojistny-ventil-rohovy': {w:48,h:48},
+  'kulovy-kohout-vypousteci': {w:48,h:48}, 'kulovy-kohout-hadice': {w:48,h:48},
+  'filtr': {w:48,h:48}, 'vodomer': {w:48,h:48},
+  'teplomer': {w:36,h:48}, 'manometr': {w:36,h:48},
+  'akumul': {w:48,h:48}, 'tuv': {w:48,h:48}, 'podlahovy-rozdelovac': {w:70,h:100},
+  'otopne-teleso': {w:60,h:32}, 'registr': {w:60,h:24}, 'konvektor': {w:60,h:28},
+  'podlahove-topeni-spirala': {w:80,h:80}, 'podlahove-topeni-meandr': {w:70,h:70},
+  'radiator': {w:60,h:40},
+  'tepelne-cerpadlo': {w:60,h:48}, 'plynovy-kotel': {w:60,h:48}, 'kotel-tuha-paliva': {w:60,h:48},
+  'solarni-kolektor': {w:60,h:48},
+  'vlnovec': {w:60,h:32},
+};
+
+const PORT_DEFINITIONS = {
+  'koleno': [{x:-16,y:-16,angle:135},{x:16,y:16,angle:315}],
+  'kriz': [{x:0,y:-20,angle:90},{x:0,y:20,angle:270},{x:-20,y:0,angle:180},{x:20,y:0,angle:0}],
+  'natrubek': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0}],
+  'redukce': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0}],
+  'sroubeni': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0}],
+  'tkus': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0},{x:0,y:20,angle:270}],
+  'tkus-red': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0},{x:0,y:20,angle:270}],
+  'vicko': [{x:-20,y:0,angle:180}],
+  'vsuvka': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0}],
+  'vsuvka-red': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0}],
+  'zatka': [{x:-20,y:0,angle:180}],
+  'alpex-sroubeni': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0}],
+  'alpex-lisovaci': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0}],
+  'cerpadlo': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0}],
+  'kulovy-ventil': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0}],
+  'trojcestny': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0},{x:0,y:20,angle:270}],
+  'mag-filtr': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0}],
+  'zpetna-klapka': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0}],
+  'zpetny-ventil': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0}],
+  'rohovy-ventil': [{x:-20,y:0,angle:180},{x:0,y:20,angle:270}],
+  'uzaviraci-shoupe': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0}],
+  'vypousteni': [{x:0,y:-8,angle:90}],
+  'odvzdusnovaci': [{x:0,y:4,angle:270}],
+  'odvzdusnovaci-auto': [{x:0,y:8,angle:270}],
+  'pojistny-ventil': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0}],
+  'pojistny-ventil-rohovy': [{x:-20,y:0,angle:180},{x:0,y:20,angle:270}],
+  'kulovy-kohout-vypousteci': [{x:0,y:-8,angle:90}],
+  'kulovy-kohout-hadice': [{x:-20,y:-8,angle:180}],
+  'filtr': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0}],
+  'vodomer': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0}],
+  'teplomer': [{x:0,y:18,angle:270}],
+  'manometr': [{x:0,y:18,angle:270}],
+  'otopne-teleso': [{x:-26,y:-8,angle:180},{x:26,y:-8,angle:0}],
+  'registr': [{x:-26,y:-12,angle:180},{x:26,y:-12,angle:0}],
+  'konvektor': [{x:-26,y:-14,angle:180},{x:26,y:-14,angle:0}],
+  'podlahove-topeni-spirala': [{x:-32,y:32,angle:180},{x:32,y:-35,angle:0}],
+  'podlahove-topeni-meandr': [{x:-31,y:0,angle:180},{x:31,y:0,angle:0}],
+  'radiator': [{x:-26,y:0,angle:180},{x:26,y:0,angle:0}],
+  'tepelne-cerpadlo': [{x:-12,y:18,angle:270},{x:12,y:18,angle:270}],
+  'plynovy-kotel': [{x:-12,y:18,angle:270},{x:12,y:18,angle:270}],
+  'kotel-tuha-paliva': [{x:-12,y:18,angle:270},{x:12,y:18,angle:270}],
+  'solarni-kolektor': [{x:-12,y:18,angle:270},{x:12,y:18,angle:270}],
+  'vlnovec': [{x:-26,y:0,angle:180},{x:26,y:0,angle:0}],
+};
+
+const FITTINGS = [
+  {id:'koleno',name:'Koleno 90°'},{id:'kriz',name:'Kříž'},{id:'tkus',name:'T-kus'},{id:'tkus-red',name:'T-kus red.'},
+  {id:'natrubek',name:'Nátrubek'},{id:'redukce',name:'Redukce'},{id:'sroubeni',name:'Šroubení'},
+  {id:'vsuvka',name:'Vsuvka'},{id:'vsuvka-red',name:'Vsuvka red.'},{id:'vicko',name:'Víčko'},{id:'zatka',name:'Zátka'},
+  {id:'alpex-sroubeni',name:'Alpex šroubení'},{id:'alpex-lisovaci',name:'Alpex lisovací'},
+];
+
+const TUBES = [
+  {id:'trubka-cerna',name:'Trubka černá',color:'#888'},
+  {id:'trubka-med',name:'Trubka měď',color:'#b87333'},
+  {id:'trubka-alpex',name:'Trubka alpex',color:'#3a6aa0'},
+];
+
+const COMPONENTS = [
+  {id:'tepelne-cerpadlo',name:'Tepelné čerpadlo'},{id:'plynovy-kotel',name:'Plynový kotel'},
+  {id:'kotel-tuha-paliva',name:'Kotel na tuhá paliva'},{id:'solarni-kolektor',name:'Solární kolektor'},
+  {id:'cerpadlo',name:'Oběhové čerpadlo'},{id:'kulovy-ventil',name:'Kulový kohout'},
+  {id:'kulovy-kohout-vypousteci',name:'Kohout s výpustí'},{id:'kulovy-kohout-hadice',name:'Kohout s hadicí'},
+  {id:'trojcestny',name:'Trojcestný ventil'},{id:'rohovy-ventil',name:'Rohový ventil'},
+  {id:'uzaviraci-shoupe',name:'Uzavírací šoupě'},{id:'zpetna-klapka',name:'Zpětná klapka'},
+  {id:'zpetny-ventil',name:'Zpětný ventil'},{id:'pojistny-ventil',name:'Pojistný ventil'},
+  {id:'pojistny-ventil-rohovy',name:'Pojistný ventil roh.'},{id:'vypousteni',name:'Vypouštění'},
+  {id:'odvzdusnovaci',name:'Odvzdušňovač (ruční)'},{id:'odvzdusnovaci-auto',name:'Odvzdušňovač (auto)'},
+  {id:'filtr',name:'Filtr'},{id:'mag-filtr',name:'Magnetický filtr'},
+  {id:'vodomer',name:'Vodoměr'},{id:'teplomer',name:'Teploměr'},{id:'manometr',name:'Manometr'},
+  {id:'vlnovec',name:'Vlnovec'},
+  {id:'akumul',name:'Aku nádoba'},{id:'tuv',name:'TUV nádoba'},
+  {id:'podlahovy-rozdelovac',name:'Podlahový rozdělovač'},
+  {id:'otopne-teleso',name:'Otopné těleso'},{id:'registr',name:'Otopný registr'},
+  {id:'konvektor',name:'Podlahový konvektor'},{id:'podlahove-topeni-spirala',name:'Podl. topení spirála'},
+  {id:'podlahove-topeni-meandr',name:'Podl. topení meandr'},{id:'radiator',name:'Radiátor'},
+];
+
+// ===== STATE =====
+let elements = [];
+let connections = [];
+let selectedId = null;
+let selectedIds = []; // Multi-select
+let assemblies = []; // Sestavy
+let nextId = 1;
+let nextAssemblyId = 1;
+let zoom = 1;
+let panX = 0, panY = 0;
+let isPanning = false;
+let panStart = null;
+let dragEl = null, dragOffX = 0, dragOffY = 0;
+let dragElStartX = 0, dragElStartY = 0; // Store original position before drag
+let isDraggingMultiple = false;
+let dragStartPositions = new Map();
+let drawPath = [];
+let tempLine = null;
+let tempNodes = [];
+let drawStartEl = null;
+let drawStartPortIdx = null;
+let isDrawing = false;
+let dragNodePipeId = null;
+let dragNodeIdx = null;
+
+const canvas = document.getElementById('canvas');
+const connSvg = document.getElementById('connections');
+
+// ===== COORD HELPERS =====
+// Convert canvas-space point → screen/viewport pixel
+function toScreen(x, y) {
+  return { x: x * zoom + panX, y: y * zoom + panY };
+}
+// Convert screen/viewport pixel → canvas-space point
+function toCanvas(sx, sy) {
+  return { x: (sx - panX) / zoom, y: (sy - panY) / zoom };
+}
+
+// ===== INIT =====
+function init() {
+  buildSidebar();
+  drawGrid();
+  setupCanvasEvents();
+}
+
+function buildSidebar() {
+  const fg = document.getElementById('fittings-grid');
+  FITTINGS.forEach(f => {
+    const el = document.createElement('div');
+    el.className = 'comp-item';
+    el.draggable = true;
+    el.innerHTML = `${SVGS[f.id]||''}<div class="name">${f.name}</div>`;
+    el.addEventListener('dragstart', e => { e.dataTransfer.setData('type',f.id); e.dataTransfer.setData('category','fitting'); e.dataTransfer.setData('name',f.name); });
+    el.addEventListener('dblclick', () => addElement(f.id, f.name, 'fitting', 120+Math.random()*400, 100+Math.random()*300));
+    fg.appendChild(el);
+  });
+
+  const cg = document.getElementById('components-grid');
+  COMPONENTS.forEach(c => {
+    const el = document.createElement('div');
+    el.className = 'comp-item';
+    el.draggable = true;
+    el.innerHTML = `${SVGS[c.id]||''}<div class="name">${c.name}</div>`;
+    el.addEventListener('dragstart', e => { e.dataTransfer.setData('type',c.id); e.dataTransfer.setData('category','component'); e.dataTransfer.setData('name',c.name); });
+    el.addEventListener('dblclick', () => addElement(c.id, c.name, 'component', 120+Math.random()*400, 100+Math.random()*300));
+    cg.appendChild(el);
+  });
+}
+
+function snapToGrid(v, g=10) { return Math.round(v/g)*g; }
+
+// Constrain point to horizontal or vertical line from prevPoint (for Shift+drag)
+function constrainToOrtho(point, prevPoint) {
+  if(!prevPoint) return point;
+  const dx = Math.abs(point.x - prevPoint.x);
+  const dy = Math.abs(point.y - prevPoint.y);
+  // Snap to horizontal or vertical based on which is closer
+  if(dx > dy) {
+    return {x: point.x, y: prevPoint.y}; // Horizontal
+  } else {
+    return {x: prevPoint.x, y: point.y}; // Vertical
+  }
+}
+
+function drawGrid() {
+  const wrap = document.getElementById('canvas-wrap');
+  const gc = document.getElementById('grid-canvas');
+  gc.width = wrap.clientWidth;
+  gc.height = wrap.clientHeight;
+  const ctx = gc.getContext('2d');
+  ctx.clearRect(0,0,gc.width,gc.height);
+  ctx.strokeStyle='#1f2540'; ctx.lineWidth=0.5;
+  const sp=20*zoom, ox=panX%sp, oy=panY%sp;
+  for(let x=ox;x<gc.width;x+=sp){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,gc.height);ctx.stroke();}
+  for(let y=oy;y<gc.height;y+=sp){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(gc.width,y);ctx.stroke();}
+  ctx.strokeStyle='#262c50'; ctx.lineWidth=1;
+  const bs=100*zoom, ox2=panX%bs, oy2=panY%bs;
+  for(let x=ox2;x<gc.width;x+=bs){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,gc.height);ctx.stroke();}
+  for(let y=oy2;y<gc.height;y+=bs){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(gc.width,y);ctx.stroke();}
+}
+
+function setupCanvasEvents() {
+  const wrap = document.getElementById('canvas-wrap');
+  wrap.addEventListener('dragover', e=>e.preventDefault());
+  wrap.addEventListener('drop', e=>{
+    e.preventDefault();
+    const type=e.dataTransfer.getData('type');
+    const cat=e.dataTransfer.getData('category');
+    const name=e.dataTransfer.getData('name');
+    if(!type) return;
+    const rect=wrap.getBoundingClientRect();
+    let c = toCanvas(e.clientX - rect.left, e.clientY - rect.top);
+    addElement(type, name, cat, snapToGrid(c.x), snapToGrid(c.y));
+  });
+
+  wrap.addEventListener('mousedown', e=>{
+    if(e.target===wrap||e.target.id==='canvas'||e.target.id==='grid-canvas') {
+      if(isDrawing) {
+        const rect=wrap.getBoundingClientRect();
+        let c=toCanvas(e.clientX-rect.left, e.clientY-rect.top);
+        // Apply snap to grid
+        c = {x: snapToGrid(c.x), y: snapToGrid(c.y)};
+        // If Shift is held, constrain to horizontal/vertical from last point
+        if(e.shiftKey && drawPath.length > 0) {
+          c = constrainToOrtho(c, drawPath[drawPath.length - 1]);
+        }
+        addWaypoint(c);
+      } else {
+        if(e.button === 2) { // Pravé tlačítko
+          e.preventDefault();
+          return;
+        }
+        isPanning=true;
+        panStart={x:e.clientX-panX, y:e.clientY-panY};
+        if(!e.ctrlKey) selectElement(null);
+      }
+    }
+  });
+
+  wrap.addEventListener('contextmenu', e=>{
+    if(e.target===wrap||e.target.id==='canvas'||e.target.id==='grid-canvas') {
+      e.preventDefault();
+    }
+  });
+
+  window.addEventListener('mousemove', e=>{
+    if(isPanning) {
+      panX=e.clientX-panStart.x;
+      panY=e.clientY-panStart.y;
+      updateCanvasTransform();
+      drawGrid();
+    }
+    if(dragEl) {
+      const wrap2=document.getElementById('canvas-wrap');
+      const rect=wrap2.getBoundingClientRect();
+      const c=toCanvas(e.clientX-rect.left, e.clientY-rect.top);
+      
+      if(isDraggingMultiple) {
+        // Pohyb celé skupiny
+        selectedIds.forEach(sid => {
+          const el = elements.find(x=>x.id==sid);
+          const startPos = dragStartPositions.get(sid);
+          if(el && startPos) {
+            const oldX = el.x;
+            const oldY = el.y;
+            el.x = snapToGrid(c.x - startPos.offsetX);
+            el.y = snapToGrid(c.y - startPos.offsetY);
+            const deltaX = el.x - oldX;
+            const deltaY = el.y - oldY;
+            renderElement(el);
+            updateConnectedPipes(sid, deltaX, deltaY);
+          }
+        });
+      } else {
+        // Pohyb jednoho elementu
+        const el=elements.find(x=>x.id==dragEl);
+        if(el) {
+          const oldX = el.x;
+          const oldY = el.y;
+          el.x=snapToGrid(c.x-dragOffX);
+          el.y=snapToGrid(c.y-dragOffY);
+          const deltaX = el.x - oldX;
+          const deltaY = el.y - oldY;
+          renderElement(el);
+          updateConnectedPipes(dragEl, deltaX, deltaY);
+        }
+      }
+    }
+    if(dragNodePipeId!==null&&dragNodeIdx!==null) {
+      const wrap2=document.getElementById('canvas-wrap');
+      const rect=wrap2.getBoundingClientRect();
+      const c=toCanvas(e.clientX-rect.left, e.clientY-rect.top);
+      const pipe=elements.find(p=>p.id===dragNodePipeId);
+      if(pipe&&pipe.path[dragNodeIdx]) {
+        pipe.path[dragNodeIdx]={x:snapToGrid(c.x),y:snapToGrid(c.y)};
+        renderDrawnPipe(pipe);
+        // update node DOM position
+        const node=document.querySelector(`.path-node[data-pipe-id="${dragNodePipeId}"][data-node-idx="${dragNodeIdx}"]`);
+        if(node) {
+          const s=toScreen(pipe.path[dragNodeIdx].x, pipe.path[dragNodeIdx].y);
+          node.style.left=s.x+'px';
+          node.style.top=s.y+'px';
+        }
+      }
+    }
+    if(isDrawing&&drawPath.length>0&&tempLine) {
+      const wrap2=document.getElementById('canvas-wrap');
+      const rect=wrap2.getBoundingClientRect();
+      let c=toCanvas(e.clientX-rect.left, e.clientY-rect.top);
+      // Apply snap to grid for preview
+      c = {x: snapToGrid(c.x), y: snapToGrid(c.y)};
+      // If Shift is held, constrain to horizontal/vertical from last point
+      if(e.shiftKey && drawPath.length > 0) {
+        c = constrainToOrtho(c, drawPath[drawPath.length - 1]);
+      }
+      // Preview in screen space
+      const previewPath=[...drawPath,c];
+      const pathD='M'+previewPath.map(p=>{const s=toScreen(p.x,p.y);return`${s.x},${s.y}`;}).join(' L');
+      tempLine.setAttribute('d',pathD);
+    }
+  });
+
+  window.addEventListener('mouseup', ()=>{ isPanning=false; dragEl=null; isDraggingMultiple=false; dragStartPositions.clear(); dragNodePipeId=null; dragNodeIdx=null; });
+
+  wrap.addEventListener('wheel', e=>{
+    e.preventDefault();
+    const rect=wrap.getBoundingClientRect();
+    const mx=e.clientX-rect.left;
+    const my=e.clientY-rect.top;
+    const delta=e.deltaY>0?0.9:1.1;
+    const newZoom=Math.min(3,Math.max(0.2,zoom*delta));
+    panX=mx-(mx-panX)*(newZoom/zoom);
+    panY=my-(my-panY)*(newZoom/zoom);
+    zoom=newZoom;
+    updateCanvasTransform();
+    drawGrid();
+    document.getElementById('zoom-level').textContent=`Zoom: ${Math.round(zoom*100)}%`;
+  },{passive:false});
+}
+
+function updateCanvasTransform() {
+  // Canvas div gets CSS transform for component positioning
+  canvas.style.transform=`translate(${panX}px,${panY}px) scale(${zoom})`;
+  canvas.style.transformOrigin='0 0';
+  // SVG stays fixed - we redraw all paths in screen space
+  redrawAllPipes();
+  // Update path node DOM positions (they're in screen space)
+  document.querySelectorAll('.path-node').forEach(node=>{
+    const pipeId=parseInt(node.dataset.pipeId);
+    const nodeIdx=parseInt(node.dataset.nodeIdx);
+    const pipe=elements.find(p=>p.id===pipeId);
+    if(pipe&&pipe.path[nodeIdx]) {
+      const s=toScreen(pipe.path[nodeIdx].x, pipe.path[nodeIdx].y);
+      node.style.left=s.x+'px';
+      node.style.top=s.y+'px';
+    }
+  });
+}
+
+// Redraw all drawn pipes with current zoom/pan
+function redrawAllPipes() {
+  elements.filter(e=>e.type==='drawn-pipe').forEach(pipe=>renderDrawnPipe(pipe));
+  // Also update temp line if drawing
+  if(tempLine&&drawPath.length>0) {
+    const pathD='M'+drawPath.map(p=>{const s=toScreen(p.x,p.y);return`${s.x},${s.y}`;}).join(' L');
+    tempLine.setAttribute('d',pathD);
+  }
+}
+
+// ===== ELEMENTS =====
+function addElement(type, name, category, x, y) {
+  const id=nextId++;
+  const el={id,type,name,category,x,y,dn:'DN25',note:'',rotation:0,material:'',length:1,ports:[]};
+  
+  // Speciální inicializace pro redukci - dvě DN hodnoty
+  if(type==='redukce') {
+    el.dn1='DN25';
+    el.dn2='DN20';
+    el.dn='DN25/DN20'; // Kombinované zobrazení
+  }
+  
+  if(type==='akumul') {
+    el.capacity=200;
+    el.ports=[{side:'vlevo',pos:50,label:'Vstup',dn:'DN25'},{side:'vpravo',pos:50,label:'Výstup',dn:'DN25'}];
+  }
+  if(type==='tuv') {
+    el.capacity=150;
+    el.ports=[{side:'vlevo',pos:20,label:'Studená',dn:'DN25'},{side:'vlevo',pos:80,label:'Cirkulace',dn:'DN15'},{side:'vpravo',pos:50,label:'Teplá',dn:'DN25'}];
+  }
+  if(type==='podlahovy-rozdelovac') {
+    el.circuits=4;
+    el.ports=[];
+    const spacing=70/(el.circuits+1);
+    for(let i=0;i<el.circuits;i++){
+      const pos=15+(i*15);
+      el.ports.push({side:'vlevo',pos,label:`Teplé ${i+1}`,dn:'DN20',type:'teple'});
+      el.ports.push({side:'vpravo',pos,label:`Studené ${i+1}`,dn:'DN20',type:'studene'});
+    }
+    el.ports.push({side:'nahore',pos:50,label:'Přívod',dn:'DN25',type:'teple'});
+    el.ports.push({side:'dole',pos:50,label:'Návrat',dn:'DN25',type:'studene'});
+  }
+  elements.push(el);
+  renderElement(el);
+  selectElement(id);
+  updateBOM();
+}
+
+function renderElement(el) {
+  let existing=document.getElementById('el-'+el.id);
+  if(existing) existing.remove();
+  if(el.type==='drawn-pipe'){renderDrawnPipe(el);return;}
+
+  const wrap=document.createElement('div');
+  wrap.className='canvas-el'+(selectedId==el.id?' selected':'');
+  // Add multi-port class for elements with many ports (akumul, TUV, rozdelovac)
+  const isMultiPort = (el.ports && el.ports.length>2) || el.type==='podlahovy-rozdelovac';
+  if(isMultiPort) {
+    wrap.className+=' multi-port';
+    wrap.style.zIndex='100'; // Multi-port elements always on top
+  } else {
+    wrap.style.zIndex=el.id; // Regular elements stack by ID (creation order)
+  }
+  wrap.id='el-'+el.id;
+  wrap.style.left=el.x+'px';
+  wrap.style.top=el.y+'px';
+
+  const checkbox=document.createElement('div');
+  checkbox.className='el-checkbox';
+  if(selectedIds.includes(el.id)) checkbox.classList.add('checked');
+  checkbox.onclick=(e)=>{e.stopPropagation();toggleCheckbox(el.id);};
+  wrap.appendChild(checkbox);
+
+  if(el.category==='tube') {
+    const tube=TUBES.find(t=>t.id===el.type);
+    const color=tube?tube.color:'#888';
+    const len=(el.length||1)*50;
+    const box=document.createElement('div');
+    box.style.cssText=`width:${len}px;display:flex;flex-direction:column;align-items:center;position:relative`;
+    const bar=document.createElement('div');
+    bar.style.cssText=`width:${len}px;height:10px;background:${color};border-radius:5px;position:relative`;
+    const dnLabel=document.createElement('div');
+    dnLabel.style.cssText=`position:absolute;top:-14px;left:50%;transform:translateX(-50%);font-size:9px;color:${color};white-space:nowrap`;
+    dnLabel.textContent=el.dn||'DN25';
+    bar.appendChild(dnLabel);
+    const nameL=document.createElement('div');
+    nameL.className='pipe-label'; nameL.style.color=color;
+    nameL.textContent=el.name+(el.note?' · '+el.note:'');
+    box.appendChild(bar); box.appendChild(nameL);
+    wrap.appendChild(box);
+  } else {
+    const box=document.createElement('div');
+    box.className='el-box'+(el.type==='akumul'||el.type==='tuv'?' tank':'');
+
+    if(el.type==='akumul'||el.type==='tuv') {
+      box.innerHTML=SVGS[el.type]||'';
+      const lbl=document.createElement('div'); lbl.className='el-label'; lbl.textContent=el.name;
+      const dn=document.createElement('div'); dn.className='el-dn'; dn.textContent=el.dn||'';
+      box.appendChild(lbl); box.appendChild(dn);
+      if(el.note){const n=document.createElement('div');n.className='el-note';n.textContent=el.note;box.appendChild(n);}
+      
+      // Add ports for akumul/TUV
+      if(el.ports && el.ports.length>0) {
+        const svgSize=SVG_SIZES[el.type]||{w:48,h:48};
+        const padding=8; // el-box.tank has 8px padding
+        
+        // Tank dimensions within the SVG (both akumul and tuv have same rect)
+        // Stroke is 2.5px, so visual edge is offset by strokeWidth/2
+        const tankRect={x:12, y:6, w:24, h:36};
+        const strokeWidth=2.5;
+        const strokeOffset=strokeWidth/2; // 1.25px
+        
+        el.ports.forEach((port,idx)=>{
+          // Check if this port has a direct connection
+          const hasDirectConnection = elements.some(e => 
+            e.type === 'drawn-pipe' && e.isDirectConnection && 
+            ((e.fromEl === el.id && e.fromPort === idx) || (e.toEl === el.id && e.toPort === idx))
+          );
+          
+          // Skip rendering this port if it has a direct connection
+          if(hasDirectConnection) return;
+          
+          const portEl=document.createElement('div');
+          portEl.className='conn-port';
+          portEl.dataset.elId=el.id;
+          portEl.dataset.portIdx=idx;
+          portEl.title=port.label;
+          
+          // Calculate position based on side and pos (percentage)
+          // Ports positioned at specified positions
+          let x=0;
+          let y=0;
+          
+          if(port.side==='vlevo') {
+            x=-8; // Left side position
+            y=(port.pos/100)*svgSize.h;
+          } else if(port.side==='vpravo') {
+            x=83; // Right side position
+            y=(port.pos/100)*svgSize.h;
+          } else if(port.side==='nahore') {
+            x=(port.pos/100)*svgSize.w;
+            y=-5; // Top edge of viewBox
+          } else if(port.side==='dole') {
+            x=(port.pos/100)*svgSize.w;
+            y=svgSize.h-5; // Bottom edge of viewBox
+          }
+          
+          portEl.style.left=x+'px';
+          portEl.style.top=y+'px';
+          
+          portEl.onclick=(e)=>{e.stopPropagation();handlePortClick(el.id,idx,e);};
+          box.appendChild(portEl);
+        });
+      }
+    } else {
+      const labelWrap=document.createElement('div');
+      labelWrap.className='el-label-wrap';
+      const lbl=document.createElement('div'); lbl.className='el-label'; lbl.textContent=el.name;
+      labelWrap.appendChild(lbl);
+      if(el.dn){const dn=document.createElement('div');dn.className='el-dn';dn.textContent=el.dn;labelWrap.appendChild(dn);}
+      if(el.note){const n=document.createElement('div');n.className='el-note';n.textContent=el.note;labelWrap.appendChild(n);}
+      box.appendChild(labelWrap);
+
+      const svgWrap=document.createElement('div');
+      svgWrap.className='el-svg-wrap';
+      svgWrap.innerHTML=SVGS[el.type]||'';
+      svgWrap.style.transform=`rotate(${el.rotation||0}deg)`;
+      svgWrap.style.transformOrigin='center center';
+      const svgSize=SVG_SIZES[el.type]||{w:48,h:48};
+      const svgEl=svgWrap.querySelector('svg');
+      if(svgEl){svgEl.setAttribute('width',svgSize.w);svgEl.setAttribute('height',svgSize.h);}
+      box.appendChild(svgWrap);
+
+      // Add ports - pro akumul/TUV/rozdelovac z el.ports pole
+      if((el.type==='akumul'||el.type==='tuv'||el.type==='podlahovy-rozdelovac') && el.ports && el.ports.length>0) {
+        const svgSize=SVG_SIZES[el.type]||{w:48,h:48};
+        const centerX=svgSize.w/2;
+        const centerY=svgSize.h/2;
+        
+        el.ports.forEach((port,idx)=>{
+          // Check if this port has a direct connection
+          const hasDirectConnection = elements.some(e => 
+            e.type === 'drawn-pipe' && e.isDirectConnection && 
+            ((e.fromEl === el.id && e.fromPort === idx) || (e.toEl === el.id && e.toPort === idx))
+          );
+          
+          // Skip rendering this port if it has a direct connection
+          if(hasDirectConnection) return;
+          
+          const portEl=document.createElement('div');
+          portEl.className='conn-port';
+          portEl.dataset.elId=el.id;
+          portEl.dataset.portIdx=idx;
+          portEl.title=port.label;
+          
+          // Calculate position based on side and pos (percentage)
+          let x=centerX;
+          let y=centerY;
+          
+          if(port.side==='vlevo') {
+            x=-5; // Left edge
+            y=(port.pos/100)*svgSize.h;
+          } else if(port.side==='vpravo') {
+            x=svgSize.w-5; // Right edge
+            y=(port.pos/100)*svgSize.h;
+          } else if(port.side==='nahore') {
+            x=(port.pos/100)*svgSize.w;
+            y=-5; // Top edge
+          } else if(port.side==='dole') {
+            x=(port.pos/100)*svgSize.w;
+            y=svgSize.h-5; // Bottom edge
+          }
+          
+          portEl.style.left=x+'px';
+          portEl.style.top=y+'px';
+          
+          // Add color indication for hot/cold
+          if(port.type==='teple') {
+            portEl.style.background='rgba(226, 75, 74, 0.8)'; // Red for hot
+          } else if(port.type==='studene') {
+            portEl.style.background='rgba(74, 114, 195, 0.8)'; // Blue for cold
+          }
+          
+          portEl.onclick=(e)=>{e.stopPropagation();handlePortClick(el.id,idx,e);};
+          svgWrap.appendChild(portEl);
+        });
+      }
+
+      // Add ports - pro standardní fitinky z PORT_DEFINITIONS
+      const portDef=PORT_DEFINITIONS[el.type];
+      if(portDef) {
+        const svgSize2=SVG_SIZES[el.type]||{w:48,h:48};
+        portDef.forEach((port,idx)=>{
+          // Check if this port has a direct connection
+          const hasDirectConnection = elements.some(e => 
+            e.type === 'drawn-pipe' && e.isDirectConnection && 
+            ((e.fromEl === el.id && e.fromPort === idx) || (e.toEl === el.id && e.toPort === idx))
+          );
+          
+          // Skip rendering this port if it has a direct connection
+          if(hasDirectConnection) return;
+          
+          const portEl=document.createElement('div');
+          portEl.className='conn-port';
+          portEl.dataset.elId=el.id; portEl.dataset.portIdx=idx;
+          portEl.style.left=(svgSize2.w/2+port.x)+'px';
+          portEl.style.top=(svgSize2.h/2+port.y)+'px';
+          portEl.onclick=(e)=>{e.stopPropagation();handlePortClick(el.id,idx,e);};
+          svgWrap.appendChild(portEl);
+        });
+      }
+    }
+    wrap.appendChild(box);
+  }
+
+  wrap.addEventListener('mousedown', e=>{
+    if(e.target.className==='conn-port'||e.target.classList.contains('el-checkbox')) return;
+    if(isDrawing){e.stopPropagation();return;}
+    // Pravé tlačítko nemění výběr, jen zobrazí context menu
+    if(e.button === 2) {
+      e.stopPropagation();
+      return;
+    }
+    e.stopPropagation();
+    
+    const wrapRect=document.getElementById('canvas-wrap').getBoundingClientRect();
+    const c=toCanvas(e.clientX-wrapRect.left, e.clientY-wrapRect.top);
+    
+    // Pokud element už je ve výběru a neklikáme s Ctrl, nechat výběr být (pro drag skupiny)
+    const isAlreadySelected = selectedIds.includes(el.id);
+    
+    if(!isAlreadySelected || e.ctrlKey) {
+      // Element není vybraný nebo chceme togglenout výběr
+      selectElement(el.id, e.ctrlKey);
+    }
+    
+    // Pokud je element součástí multi-select, drag celou skupinu
+    if(selectedIds.length > 1 && selectedIds.includes(el.id)) {
+      isDraggingMultiple = true;
+      dragStartPositions.clear();
+      selectedIds.forEach(sid => {
+        const selEl = elements.find(x=>x.id==sid);
+        if(selEl) {
+          dragStartPositions.set(sid, {x: selEl.x, y: selEl.y, offsetX: c.x - selEl.x, offsetY: c.y - selEl.y});
+        }
+      });
+      dragEl = el.id;
+      dragOffX = c.x - el.x;
+      dragOffY = c.y - el.y;
+    } else {
+      dragEl=el.id;
+      dragOffX=c.x-el.x;
+      dragOffY=c.y-el.y;
+      dragElStartX=el.x; // Store original position
+      dragElStartY=el.y;
+    }
+  });
+
+  wrap.addEventListener('contextmenu', e=>{
+    e.preventDefault();
+    e.stopPropagation();
+    if(selectedIds.length > 0) {
+      showContextMenu(e.clientX, e.clientY);
+    }
+  });
+
+  wrap.addEventListener('dblclick', e=>{e.stopPropagation();openElementModal(el.id);});
+  canvas.appendChild(wrap);
+}
+
+function removeElement(id) {
+  const connectedPipes=elements.filter(e=>e.type==='drawn-pipe'&&(e.fromEl===id||e.toEl===id));
+  connectedPipes.forEach(pipe=>{
+    ['el-','label-'].forEach(pre=>{const d=document.getElementById(pre+pipe.id);if(d)d.remove();});
+    document.querySelectorAll(`.path-node[data-pipe-id="${pipe.id}"]`).forEach(n=>n.remove());
+  });
+  elements=elements.filter(e=>e.id!==id&&!(e.type==='drawn-pipe'&&(e.fromEl===id||e.toEl===id)));
+  const domEl=document.getElementById('el-'+id);
+  if(domEl) domEl.remove();
+  
+  // Odstranit element ze v\u0161ech sestav
+  assemblies.forEach(asm => {
+    const idx = asm.elementIds.indexOf(id);
+    if(idx > -1) asm.elementIds.splice(idx, 1);
+  });
+  // Odstranit pr\u00e1zdn\u00e9 sestavy
+  assemblies = assemblies.filter(asm => asm.elementIds.length > 0);
+  updateAssemblyList();
+  
+  if(selectedId===id) selectElement(null);
+  // Odstranit z multi-select
+  const multiIdx = selectedIds.indexOf(id);
+  if(multiIdx > -1) selectedIds.splice(multiIdx, 1);
+  
+  updateBOM();
+}
+
+function selectElement(id, isCtrl = false) {
+  if(isCtrl && id) {
+    // Multi-select toggle
+    const idx = selectedIds.indexOf(id);
+    if(idx > -1) {
+      selectedIds.splice(idx, 1);
+      const el=document.getElementById('el-'+id);
+      if(el) {
+        el.classList.remove('multi-selected');
+        const cb = el.querySelector('.el-checkbox');
+        if(cb) cb.classList.remove('checked');
+      }
+    } else {
+      selectedIds.push(id);
+      const el=document.getElementById('el-'+id);
+      if(el) {
+        el.classList.add('multi-selected');
+        const cb = el.querySelector('.el-checkbox');
+        if(cb) cb.classList.add('checked');
+      }
+    }
+    selectedId = selectedIds.length > 0 ? selectedIds[selectedIds.length-1] : null;
+    if(selectedIds.length > 0) {
+      document.getElementById('props-inner').innerHTML=`<div class="no-sel">Vybráno ${selectedIds.length} prvků</div>`;
+    } else {
+      document.getElementById('props-inner').innerHTML='<div class="no-sel">Vyberte prvek pro editaci</div>';
+    }
+  } else {
+    // Single select
+    selectedId=id;
+    document.querySelectorAll('.canvas-el').forEach(el=>{
+      el.classList.remove('selected');
+      el.classList.remove('multi-selected');
+      const cb = el.querySelector('.el-checkbox');
+      if(cb) cb.classList.remove('checked');
+    });
+    selectedIds = id ? [id] : [];
+    if(id) {
+      const el=document.getElementById('el-'+id);
+      if(el) {
+        el.classList.add('selected');
+        const cb = el.querySelector('.el-checkbox');
+        if(cb) cb.classList.add('checked');
+      }
+      renderProps(id);
+    } else {
+      document.getElementById('props-inner').innerHTML='<div class="no-sel">Vyberte prvek pro editaci</div>';
+    }
+  }
+}
+
+function toggleCheckbox(id) {
+  const idx = selectedIds.indexOf(id);
+  if(idx > -1) {
+    // Odebrat
+    selectedIds.splice(idx, 1);
+    const el=document.getElementById('el-'+id);
+    if(el) {
+      el.classList.remove('multi-selected');
+      el.classList.remove('selected');
+      const cb = el.querySelector('.el-checkbox');
+      if(cb) cb.classList.remove('checked');
+    }
+  } else {
+    // Přidat
+    selectedIds.push(id);
+    const el=document.getElementById('el-'+id);
+    if(el) {
+      el.classList.add('multi-selected');
+      const cb = el.querySelector('.el-checkbox');
+      if(cb) cb.classList.add('checked');
+    }
+  }
+  
+  selectedId = selectedIds.length > 0 ? selectedIds[selectedIds.length-1] : null;
+  if(selectedIds.length > 0) {
+    document.getElementById('props-inner').innerHTML=`<div class="no-sel">Vybráno ${selectedIds.length} prvků</div>`;
+  } else {
+    document.getElementById('props-inner').innerHTML='<div class="no-sel">Vyberte prvek pro editaci</div>';
+  }
+}
+
+// ===== PROPS =====
+function renderProps(id) {
+  const el=elements.find(e=>e.id===id);
+  if(!el) return;
+
+  if(el.type==='drawn-pipe') {
+    const fromEl=elements.find(e=>e.id===el.fromEl);
+    const toEl=elements.find(e=>e.id===el.toEl);
+    const isDirectConn = el.isDirectConnection || el.length === 0;
+    let html=`<div class="prop-row"><div class="prop-label">${isDirectConn ? 'Typ' : 'Materiál'}</div><div style="color:#c0c8e8;font-size:12px;padding:5px 0">${isDirectConn ? 'Přímé spojení' : el.name}</div></div>`;
+    html+=`<div class="prop-row"><div class="prop-label">DN</div><div style="color:#4a72c3;font-size:12px;font-weight:700;padding:5px 0">${el.dn}</div></div>`;
+    if(!isDirectConn) {
+      html+=`<div class="prop-row"><div class="prop-label">Délka</div><div style="color:#c0c8e8;font-size:12px;padding:5px 0">${el.length} m</div></div>`;
+    }
+    html+=`<div class="prop-row"><div class="prop-label">Od</div><div style="color:#5abb8a;font-size:11px;padding:5px 0">${fromEl?.name||'?'}</div></div>`;
+    html+=`<div class="prop-row"><div class="prop-label">Do</div><div style="color:#5abb8a;font-size:11px;padding:5px 0">${toEl?.name||'?'}</div></div>`;
+    html+=`<div style="margin-top:12px"><button class="btn danger" style="width:100%" onclick="removeElement(${id})">🗑 Smazat</button></div>`;
+    document.getElementById('props-inner').innerHTML=html;
+    return;
+  }
+
+  let html=`<div class="prop-row"><div class="prop-label">Název</div><input class="prop-input" value="${el.name}" oninput="updateProp(${id},'name',this.value)"></div>`;
+  
+  // Pro redukci zobrazit dvě DN hodnoty
+  if(el.type==='redukce') {
+    html+=`<div class="prop-row"><div class="prop-label">DN1 (vstup)</div><select class="prop-select" onchange="updateProp(${id},'dn1',this.value)">${DN_OPTIONS.map(d=>`<option ${el.dn1===d?'selected':''}>${d}</option>`).join('')}</select></div>`;
+    html+=`<div class="prop-row"><div class="prop-label">DN2 (výstup)</div><select class="prop-select" onchange="updateProp(${id},'dn2',this.value)">${DN_OPTIONS.map(d=>`<option ${el.dn2===d?'selected':''}>${d}</option>`).join('')}</select></div>`;
+    html+=`<div class="prop-row"><div class="prop-label">Materiál</div><select class="prop-select" onchange="updateProp(${id},'material',this.value)">${['','Ocel','Nerez','Mosaz','Měď','Plast','Litina'].map(m=>`<option ${el.material===m?'selected':''}>${m}</option>`).join('')}</select></div>`;
+  } else if(el.type==='vlnovec') {
+    // Pro vlnovec zobrazit DN a délku
+    html+=`<div class="prop-row"><div class="prop-label">DN</div><select class="prop-select" onchange="updateProp(${id},'dn',this.value)">${DN_OPTIONS.map(d=>`<option ${el.dn===d?'selected':''}>${d}</option>`).join('')}</select></div>`;
+    html+=`<div class="prop-row"><div class="prop-label">Délka (m)</div><input class="prop-input" type="number" min="0.1" step="0.1" value="${el.length||1}" oninput="updateProp(${id},'length',parseFloat(this.value)||1)"></div>`;
+  } else if(el.category!=='tube') {
+    html+=`<div class="prop-row"><div class="prop-label">DN</div><select class="prop-select" onchange="updateProp(${id},'dn',this.value)">${DN_OPTIONS.map(d=>`<option ${el.dn===d?'selected':''}>${d}</option>`).join('')}</select></div>`;
+    html+=`<div class="prop-row"><div class="prop-label">Materiál</div><select class="prop-select" onchange="updateProp(${id},'material',this.value)">${['','Ocel','Nerez','Mosaz','Měď','Plast','Litina'].map(m=>`<option ${el.material===m?'selected':''}>${m}</option>`).join('')}</select></div>`;
+  } else {
+    html+=`<div class="prop-row"><div class="prop-label">DN trubky</div><select class="prop-select" onchange="updateProp(${id},'dn',this.value)">${DN_OPTIONS.map(d=>`<option ${el.dn===d?'selected':''}>${d}</option>`).join('')}</select></div>`;
+    html+=`<div class="prop-row"><div class="prop-label">Délka (m)</div><input class="prop-input" type="number" min="0.1" step="0.1" value="${el.length||1}" oninput="updateProp(${id},'length',parseFloat(this.value)||1)"></div>`;
+  }
+  html+=`<div class="prop-row"><div class="prop-label">Poznámka</div><input class="prop-input" value="${el.note||''}" oninput="updateProp(${id},'note',this.value)"></div>`;
+  
+  // Akumulační nádoba / TUV - správa portů
+  if(el.type==='akumul'||el.type==='tuv') {
+    html+=`<div class="prop-row"><div class="prop-label">Objem (l)</div><input class="prop-input" type="number" value="${el.capacity||200}" oninput="updateProp(${id},'capacity',parseInt(this.value))"></div>`;
+    
+    html+=`<div style="border-top:1px solid #2a3050;margin-top:12px;padding-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:11px;color:#6878a8;font-weight:600">PORTY (${(el.ports||[]).length})</span>
+      </div>
+      <div style="font-size:10px;color:#5a6a88;margin-bottom:8px;padding:4px 6px;background:#12172a;border-radius:4px">
+        Pozice v % z výšky/šířky nádrže (24x36px)
+      </div>
+      <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">
+        <button class="btn" style="font-size:9px;padding:3px 6px" onclick="addMultiplePorts(${id},'vlevo',4)">+4 vlevo</button>
+        <button class="btn" style="font-size:9px;padding:3px 6px" onclick="addMultiplePorts(${id},'vpravo',4)">+4 vpravo</button>
+        <button class="btn danger" style="font-size:9px;padding:3px 6px" onclick="clearPorts(${id})">🗑</button>
+      </div>`;
+    
+    (el.ports||[]).forEach((p,i)=>{
+      html+=`<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;background:#1a1f2e;padding:6px;border-radius:4px;font-size:11px">
+        <input style="width:100%;font-size:11px;padding:4px 6px" value="${p.label}" id="p-label-${i}" placeholder="Název" oninput="updatePortProp(${id},${i},'label',this.value)">
+        <div style="display:flex;gap:4px">
+          <select id="p-side-${i}" style="flex:1;font-size:10px;padding:4px" onchange="updatePortProp(${id},${i},'side',this.value)">
+            <option ${p.side==='vlevo'?'selected':''}>vlevo</option>
+            <option ${p.side==='vpravo'?'selected':''}>vpravo</option>
+            <option ${p.side==='nahore'?'selected':''}>nahore</option>
+            <option ${p.side==='dole'?'selected':''}>dole</option>
+          </select>
+          <input style="width:45px;font-size:10px;padding:4px" type="number" min="0" max="100" value="${p.pos}" id="p-pos-${i}" oninput="updatePortProp(${id},${i},'pos',parseInt(this.value))" title="Pozice v %">
+          <select id="p-dn-${i}" style="width:60px;font-size:10px;padding:4px" onchange="updatePortProp(${id},${i},'dn',this.value)">${DN_OPTIONS.map(d=>`<option ${p.dn===d?'selected':''}>${d}</option>`).join('')}</select>
+          <button class="btn danger" style="padding:2px 6px;font-size:10px" onclick="removePort(${id},${i})">×</button>
+        </div>
+      </div>`;
+    });
+    
+    html+=`<button class="btn" style="width:100%;font-size:11px;padding:6px" onclick="addPortToEl(${id})">+ Přidat port</button></div>`;
+  }
+  
+  if(el.type==='podlahovy-rozdelovac') {
+    html+=`<div class="prop-row"><div class="prop-label">Počet okruhů</div><input class="prop-input" type="number" min="1" max="12" value="${el.circuits||4}" oninput="updateCircuits(${id},parseInt(this.value))"></div>`;
+  }
+  
+  html+=`<div style="margin-top:12px"><button class="btn danger" style="width:100%" onclick="removeElement(${id})">🗑 Smazat</button></div>`;
+  document.getElementById('props-inner').innerHTML=html;
+}
+
+function updateProp(id,prop,value) {
+  const el=elements.find(e=>e.id===id);
+  if(!el) return;
+  el[prop]=value;
+  
+  // Pro redukci aktualizovat kombinované DN při změně dn1 nebo dn2
+  if(el.type==='redukce' && (prop==='dn1' || prop==='dn2')) {
+    el.dn=`${el.dn1||'DN25'}/${el.dn2||'DN25'}`;
+  }
+  
+  renderElement(el);
+  redrawAllPipes();
+  updateBOM();
+}
+
+function updatePortProp(id,portIdx,prop,value) {
+  const el=elements.find(e=>e.id===id);
+  if(!el||!el.ports||!el.ports[portIdx]) return;
+  el.ports[portIdx][prop]=value;
+  renderElement(el);
+  renderProps(id);
+  redrawAllPipes();
+  updateBOM();
+}
+
+// ===== PORT MANAGEMENT =====
+function addPortToEl(id) {
+  const el=elements.find(e=>e.id===id);
+  if(!el) return;
+  el.ports=el.ports||[];
+  el.ports.push({side:'vlevo',pos:50,label:'Nový',dn:'DN25'});
+  renderElement(el);
+  renderProps(id);
+  redrawAllPipes();
+  updateBOM();
+}
+
+function addMultiplePorts(id,side,count) {
+  const el=elements.find(e=>e.id===id);
+  if(!el) return;
+  el.ports=el.ports||[];
+  const spacing=100/(count+1);
+  for(let i=1;i<=count;i++) {
+    el.ports.push({side:side,pos:Math.round(spacing*i),label:`${side} ${i}`,dn:'DN25'});
+  }
+  renderElement(el);
+  renderProps(id);
+  redrawAllPipes();
+  updateBOM();
+}
+
+function clearPorts(id) {
+  const el=elements.find(e=>e.id===id);
+  if(!el) return;
+  if(confirm('Opravdu smazat všechny otvory?')) {
+    el.ports=[];
+    renderElement(el);
+    renderProps(id);
+    redrawAllPipes();
+    updateBOM();
+  }
+}
+
+function removePort(id,portIdx) {
+  const el=elements.find(e=>e.id===id);
+  if(!el||!el.ports) return;
+  el.ports.splice(portIdx,1);
+  renderElement(el);
+  renderProps(id);
+  redrawAllPipes();
+  updateBOM();
+}
+
+function updateCircuits(id,circuits) {
+  const el=elements.find(e=>e.id===id);
+  if(!el||el.type!=='podlahovy-rozdelovac') return;
+  el.circuits=Math.max(1,Math.min(12,circuits));
+  el.ports=[];
+  const spacing=70/(el.circuits+1);
+  for(let i=0;i<el.circuits;i++) {
+    const pos=15+(i*15);
+    el.ports.push({side:'vlevo',pos,label:`Teplé ${i+1}`,dn:'DN20',type:'teple'});
+    el.ports.push({side:'vpravo',pos,label:`Studené ${i+1}`,dn:'DN20',type:'studene'});
+  }
+  el.ports.push({side:'nahore',pos:50,label:'Přívod',dn:'DN25',type:'teple'});
+  el.ports.push({side:'dole',pos:50,label:'Návrat',dn:'DN25',type:'studene'});
+  renderElement(el);renderProps(id);updateBOM();
+}
+
+// ===== PORT CLICK / DRAWING =====
+function handlePortClick(elId, portIdx, event) {
+  const el=elements.find(e=>e.id===elId);
+  if(!el||el.type==='drawn-pipe') return;
+
+  if(!drawStartEl) {
+    // Start drawing
+    drawStartEl=elId; drawStartPortIdx=portIdx;
+    const domEl=document.getElementById('el-'+elId);
+    if(domEl) domEl.style.boxShadow='0 0 15px #5abb8a';
+    const startPos=getPortWorldPosition(elId,portIdx);
+    drawPath=[startPos];
+    // Create temp line in SVG (screen space)
+    tempLine=document.createElementNS('http://www.w3.org/2000/svg','path');
+    tempLine.setAttribute('stroke','#5abb8a');
+    tempLine.setAttribute('stroke-width','3');
+    tempLine.setAttribute('fill','none');
+    tempLine.setAttribute('stroke-linecap','round');
+    tempLine.setAttribute('stroke-dasharray','8 4');
+    tempLine.style.pointerEvents='none';
+    connSvg.appendChild(tempLine);
+    isDrawing=true;
+    document.body.classList.add('drawing-mode');
+    document.getElementById('info-bar').textContent='✓ Klikněte na port cíle (přímé spojení) NEBO přidávejte body kliknutím na plátno | Shift = rovné čáry';
+    document.getElementById('draw-btn').style.display='block';
+  } else if(elId!==drawStartEl||portIdx!==drawStartPortIdx) {
+    // End drawing - ale nejdřív zkontrolovat a odstranit existující spojení na těchto portech
+    
+    // Najít a odstranit existující spojení na výchozím portu
+    const existingFromPipes = elements.filter(e => 
+      e.type === 'drawn-pipe' && 
+      ((e.fromEl === drawStartEl && e.fromPort === drawStartPortIdx) ||
+       (e.toEl === drawStartEl && e.toPort === drawStartPortIdx))
+    );
+    existingFromPipes.forEach(pipe => removeElement(pipe.id));
+    
+    // Najít a odstranit existující spojení na cílovém portu
+    const existingToPipes = elements.filter(e => 
+      e.type === 'drawn-pipe' && 
+      ((e.fromEl === elId && e.fromPort === portIdx) ||
+       (e.toEl === elId && e.toPort === portIdx))
+    );
+    existingToPipes.forEach(pipe => removeElement(pipe.id));
+    
+    const endPos=getPortWorldPosition(elId,portIdx);
+    drawPath.push(endPos);
+    showDrawnPipeModal(drawStartEl, elId, drawStartPortIdx, portIdx);
+  }
+}
+
+// Returns position in CANVAS space
+function getPortWorldPosition(elId, portIdx) {
+  const el=elements.find(e=>e.id===elId);
+  if(!el) return {x:0,y:0};
+
+  const dom=document.getElementById('el-'+elId);
+  if(!dom) return {x:el.x,y:el.y};
+
+  // PRIORITY: Try to get actual DOM position first (most accurate)
+  const portEl = dom.querySelector(`.conn-port[data-el-id="${elId}"][data-port-idx="${portIdx}"]`);
+  if(portEl) {
+    const canvasWrap = document.getElementById('canvas-wrap');
+    const canvasWrapRect = canvasWrap.getBoundingClientRect();
+    const portRect = portEl.getBoundingClientRect();
+    
+    // Port center in viewport space
+    const portCenterX = portRect.left + portRect.width / 2;
+    const portCenterY = portRect.top + portRect.height / 2;
+    
+    // Convert to canvas-wrap relative
+    const relativeX = portCenterX - canvasWrapRect.left;
+    const relativeY = portCenterY - canvasWrapRect.top;
+    
+    // Convert to world space using the same transform as everything else
+    return toCanvas(relativeX, relativeY);
+  }
+
+  // FALLBACK: Calculate position (for ports that may not be rendered)
+  const svgSize=SVG_SIZES[el.type]||{w:48,h:48};
+  const svgWrap=dom.querySelector('.el-svg-wrap');
+  
+  // For tanks (akumul/TUV) with el.ports array but without svgWrap
+  if((el.type==='akumul'||el.type==='tuv') && el.ports && el.ports[portIdx]) {
+    const port=el.ports[portIdx];
+    const padding=8; // el-box.tank has 8px padding
+    
+    let portX=0;
+    let portY=0;
+
+    // Calculate position based on side and pos (percentage)
+    // Ports positioned at specified positions (relative to el-box including padding)
+    if(port.side==='vlevo') {
+      portX=padding+(-12); // Left side position
+      portY=padding+(port.pos/100)*svgSize.h;
+    } else if(port.side==='vpravo') {
+      portX=padding+95; // Right side position
+      portY=padding+(port.pos/100)*svgSize.h;
+    } else if(port.side==='nahore') {
+      portX=padding+(port.pos/100)*svgSize.w;
+      portY=padding+(-5); // Top position
+    } else if(port.side==='dole') {
+      portX=padding+(port.pos/100)*svgSize.w;
+      portY=padding+svgSize.h-5; // Bottom position
+    }
+
+    // For tank-style: rotation applied to whole element
+    const rotation=(el.rotation||0)*Math.PI/180;
+    const centerX=padding+svgSize.w/2;
+    const centerY=padding+svgSize.h/2;
+    const rotatedX=(portX-centerX)*Math.cos(rotation)-(portY-centerY)*Math.sin(rotation);
+    const rotatedY=(portX-centerX)*Math.sin(rotation)+(portY-centerY)*Math.cos(rotation);
+
+    return {
+      x: el.x+centerX+rotatedX,
+      y: el.y+centerY+rotatedY
+    };
+  }
+
+  // For elements with el.ports array and svgWrap (rozdelovac)
+  if(el.ports && el.ports[portIdx] && svgWrap) {
+    const port=el.ports[portIdx];
+    let portX=0;
+    let portY=0;
+
+    // Calculate position based on side and pos (percentage)
+    if(port.side==='vlevo') {
+      portX=0; // Left edge
+      portY=(port.pos/100)*svgSize.h;
+    } else if(port.side==='vpravo') {
+      portX=svgSize.w; // Right edge
+      portY=(port.pos/100)*svgSize.h;
+    } else if(port.side==='nahore') {
+      portX=(port.pos/100)*svgSize.w;
+      portY=0; // Top edge
+    } else if(port.side==='dole') {
+      portX=(port.pos/100)*svgSize.w;
+      portY=svgSize.h; // Bottom edge
+    }
+
+    // For fitting-style: label above, SVG below
+    const rotation=(el.rotation||0)*Math.PI/180;
+    const rotatedX=(portX-svgSize.w/2)*Math.cos(rotation)-(portY-svgSize.h/2)*Math.sin(rotation);
+    const rotatedY=(portX-svgSize.w/2)*Math.sin(rotation)+(portY-svgSize.h/2)*Math.cos(rotation);
+
+    const labelWrap=dom.querySelector('.el-label-wrap');
+    const labelHeight=labelWrap?labelWrap.offsetHeight:0;
+    const labelMargin=24; // margin-bottom from CSS
+
+    const svgCenterOffsetX=svgSize.w/2;
+    const svgCenterOffsetY=labelHeight+labelMargin+svgSize.h/2;
+
+    return {
+      x: el.x+svgCenterOffsetX+rotatedX,
+      y: el.y+svgCenterOffsetY+rotatedY
+    };
+  }
+
+  // For elements with PORT_DEFINITIONS
+  const portDef=PORT_DEFINITIONS[el.type];
+  if(portDef&&portDef[portIdx]) {
+    const port=portDef[portIdx];
+    const rotation=(el.rotation||0)*Math.PI/180;
+    const rotX=port.x*Math.cos(rotation)-port.y*Math.sin(rotation);
+    const rotY=port.x*Math.sin(rotation)+port.y*Math.cos(rotation);
+    const dom=document.getElementById('el-'+elId);
+    const labelWrap=dom?dom.querySelector('.el-label-wrap'):null;
+    const labelH=labelWrap?labelWrap.offsetHeight:0;
+    const labelMargin=24; // margin-bottom from CSS
+    return {
+      x: el.x + svgSize.w/2 + rotX,
+      y: el.y + labelH + labelMargin + svgSize.h/2 + rotY
+    };
+  }
+
+  // Fallback to element center
+  return {x:el.x+24, y:el.y+24};
+}
+
+function addWaypoint(point) {
+  drawPath.push(point);
+  const node=document.createElement('div');
+  node.className='path-node';
+  const s=toScreen(point.x,point.y);
+  node.style.left=s.x+'px';
+  node.style.top=s.y+'px';
+  tempNodes.push(node);
+  document.getElementById('canvas-wrap').appendChild(node);
+  document.getElementById('info-bar').textContent=`${drawPath.length-1} bodů | Klikněte cílový port nebo přidejte další body | Shift = rovné čáry`;
+}
+
+function updateConnectedPipes(elId, deltaX = null, deltaY = null) {
+  // Find all pipes connected to this element
+  const connectedPipes = elements.filter(e => 
+    e.type === 'drawn-pipe' && (e.fromEl === elId || e.toEl === elId)
+  );
+  
+  // Track which elements we've already moved to avoid infinite loops
+  const movedElements = new Set();
+  movedElements.add(elId);
+  
+  // Recursive function to move all directly connected fittings
+  function moveConnectedGroup(currentElId, dx = null, dy = null) {
+    const pipes = elements.filter(e => 
+      e.type === 'drawn-pipe' && 
+      (e.isDirectConnection || e.length === 0) &&
+      (e.fromEl === currentElId || e.toEl === currentElId) &&
+      !movedElements.has(e.fromEl === currentElId ? e.toEl : e.fromEl)
+    );
+    
+    pipes.forEach(pipe => {
+      const nextElId = pipe.fromEl === currentElId ? pipe.toEl : pipe.fromEl;
+      const nextEl = elements.find(e => e.id === nextElId);
+      
+      if(nextEl && !movedElements.has(nextElId)) {
+        movedElements.add(nextElId);
+        
+        // If delta is provided (during drag), use it directly for rigid-body movement
+        if(dx !== null && dy !== null) {
+          nextEl.x += dx;
+          nextEl.y += dy;
+        } else {
+          // Otherwise calculate offset from port positions (for initial snap or manual moves)
+          const currentElPort = pipe.fromEl === currentElId ? pipe.fromPort : pipe.toPort;
+          const nextElPort = pipe.fromEl === currentElId ? pipe.toPort : pipe.fromPort;
+          
+          const currentPortPos = getPortWorldPosition(currentElId, currentElPort);
+          const nextPortPosBefore = getPortWorldPosition(nextElId, nextElPort);
+          
+          const offsetX = currentPortPos.x - nextPortPosBefore.x;
+          const offsetY = currentPortPos.y - nextPortPosBefore.y;
+          
+          nextEl.x += offsetX;
+          nextEl.y += offsetY;
+        }
+        
+        renderElement(nextEl);
+        
+        // Recursively move connected fittings with same delta
+        moveConnectedGroup(nextElId, dx, dy);
+      }
+    });
+  }
+  
+  // Move all directly connected fittings in the group
+  moveConnectedGroup(elId, deltaX, deltaY);
+  
+  // Now update all pipes (both direct and regular) for all moved elements
+  movedElements.forEach(movedElId => {
+    const pipes = elements.filter(e => 
+      e.type === 'drawn-pipe' && (e.fromEl === movedElId || e.toEl === movedElId)
+    );
+    
+    pipes.forEach(pipe => {
+      // Update the path start or end point using port positions
+      if(pipe.fromEl === movedElId && pipe.fromPort !== undefined) {
+        pipe.path[0] = getPortWorldPosition(movedElId, pipe.fromPort);
+      }
+      if(pipe.toEl === movedElId && pipe.toPort !== undefined) {
+        pipe.path[pipe.path.length - 1] = getPortWorldPosition(movedElId, pipe.toPort);
+      }
+      
+      // Re-render the pipe
+      renderDrawnPipe(pipe);
+    });
+  });
+}
+
+function calculatePathLength(path) {
+  let len=0;
+  for(let i=1;i<path.length;i++){
+    const dx=path[i].x-path[i-1].x, dy=path[i].y-path[i-1].y;
+    len+=Math.sqrt(dx*dx+dy*dy);
+  }
+  return len/50;
+}
+
+function createDirectConnection(fromElId, toElId, fromPortIdx, toPortIdx) {
+  // Výchozí hodnoty pro přímé spojení
+  const material = 'trubka-med'; // Měď
+  const dn = 'DN25';
+  const len = 0; // Přímé spojení = 0m
+  const note = '';
+  const shouldSnap = true; // Vždy použít auto-snap
+  
+  const fromEl = elements.find(e => e.id === fromElId);
+  const toEl = elements.find(e => e.id === toElId);
+  let componentMoved = false;
+  
+  // Automatické přiblížení komponentů
+  if(fromEl && toEl) {
+    // Zkontrolovat, jestli NA TOMTO KONKRÉTNÍM PORTU už není spojení
+    const toPortHasConnection = elements.some(e => 
+      e.type === 'drawn-pipe' && 
+      e.isDirectConnection && 
+      ((e.fromEl === toElId && e.fromPort === toPortIdx) ||
+       (e.toEl === toElId && e.toPort === toPortIdx))
+    );
+    
+    // Zkontrolovat, jestli fromEl nebo toEl už má JAKÉKOLI přímé spojení
+    const fromElHasConnection = elements.some(e => 
+      e.type === 'drawn-pipe' && 
+      e.isDirectConnection && 
+      (e.fromEl === fromElId || e.toEl === fromElId)
+    );
+    
+    const toElHasConnection = elements.some(e => 
+      e.type === 'drawn-pipe' && 
+      e.isDirectConnection && 
+      (e.fromEl === toElId || e.toEl === toElId)
+    );
+    
+    // Pokud tento port už má přímé spojení, nepoužívat auto-snap a upozornit
+    if(toPortHasConnection) {
+      if(!confirm('⚠️ Tento port už má přímé spojení. Přesto vytvořit další spojení? (Skupina se může rozpojit)')){
+        // Cleanup
+        if(tempLine){tempLine.remove();tempLine=null;}
+        tempNodes.forEach(n=>n.remove()); tempNodes=[];
+        drawPath=[]; drawStartEl=null; drawStartPortIdx=null; isDrawing=false;
+        document.body.classList.remove('drawing-mode');
+        document.getElementById('draw-btn').style.display='none';
+        document.querySelectorAll('.canvas-el').forEach(el=>el.style.boxShadow='');
+        document.getElementById('info-bar').textContent='Klikněte na modrý port pro kreslení | ☑ Zaškrtněte komponenty → pravé tlačítko → Vytvořit sestavu | Shift = rovné čáry';
+        return;
+      }
+    } else {
+      // Pokud toEl už má přímé spojení, přesuneme fromEl k toEl (toEl je fixní)
+      // Jinak přesuneme toEl k fromEl (standardní chování)
+      let elementToMove, targetEl, movePortIdx, targetPortIdx;
+      
+      if(toElHasConnection) {
+        // toEl už má spojení → přesuneme fromEl k němu
+        elementToMove = fromEl;
+        targetEl = toEl;
+        movePortIdx = fromPortIdx;
+        targetPortIdx = toPortIdx;
+      } else {
+        // Standardní: přesuneme toEl k fromEl
+        elementToMove = toEl;
+        targetEl = fromEl;
+        movePortIdx = toPortIdx;
+        targetPortIdx = fromPortIdx;
+      }
+      
+      // Vypočítat pozici portů
+      const targetPortPos = getPortWorldPosition(targetEl.id, targetPortIdx);
+      const movePortPos = getPortWorldPosition(elementToMove.id, movePortIdx);
+      
+      // Calculate offset to align ports
+      const offsetX = targetPortPos.x - movePortPos.x;
+      const offsetY = targetPortPos.y - movePortPos.y;
+      
+      // Move element by offset
+      elementToMove.x += offsetX;
+      elementToMove.y += offsetY;
+      
+      // Snap to grid
+      elementToMove.x = snapToGrid(elementToMove.x);
+      elementToMove.y = snapToGrid(elementToMove.y);
+      
+      renderElement(elementToMove);
+      componentMoved = true;
+    }
+    
+    // Přepočítat pozice portů po posunu (nebo bez posunu pokud byl skip)
+    const newFromPortPos=getPortWorldPosition(fromElId,fromPortIdx);
+    const newToPortPos=getPortWorldPosition(toElId,toPortIdx);
+    drawPath=[newFromPortPos,newToPortPos];
+  }
+  
+  const tube=TUBES.find(t=>t.id===material);
+  const id=nextId++;
+  
+  const drawnPipe={
+    id,type:'drawn-pipe',name:'Spojka',category:'drawn-pipe',
+    material,dn,length:len,note,
+    path:[...drawPath],
+    fromEl:fromElId,toEl:toElId,fromPort:fromPortIdx,toPort:toPortIdx,
+    isDirectConnection: true,
+    x:0,y:0
+  };
+  elements.push(drawnPipe);
+  renderDrawnPipe(drawnPipe);
+  
+  // Don't call updateConnectedPipes here - toEl was already positioned correctly above,
+  // and calling it would recursively move fromEl and all its connections
+  
+  // Cleanup
+  if(tempLine){tempLine.remove();tempLine=null;}
+  tempNodes.forEach(n=>n.remove()); tempNodes=[];
+  drawPath=[]; drawStartEl=null; drawStartPortIdx=null; isDrawing=false;
+  document.body.classList.remove('drawing-mode');
+  document.getElementById('draw-btn').style.display='none';
+  document.querySelectorAll('.canvas-el').forEach(el=>el.style.boxShadow='');
+  document.getElementById('info-bar').textContent='Klikněte na modrý port pro kreslení | ☑ Zaškrtněte komponenty → pravé tlačítko → Vytvořit sestavu | Shift = rovné čáry';
+  updateBOM();
+}
+
+function showDrawnPipeModal(fromElId, toElId, fromPortIdx, toPortIdx) {
+  const pathLength=calculatePathLength(drawPath);
+  const isDirectConnection = drawPath.length === 2; // Only start and end points
+  
+  const fromEl = elements.find(e => e.id === fromElId);
+  const toEl = elements.find(e => e.id === toElId);
+  
+  // Pro přímé spojení rovnou vytvoříme spojení bez modalu
+  if(isDirectConnection) {
+    createDirectConnection(fromElId, toElId, fromPortIdx, toPortIdx);
+    return;
+  }
+  
+  // Pro trubky s trasou vytvoříme rovnou s defaultními hodnotami
+  const material='trubka-med'; // Default: Měď
+  const dn='DN25'; // Default DN
+  const len=pathLength;
+  const note='';
+  
+  const tube=TUBES.find(t=>t.id===material);
+  const id=nextId++;
+  const pipeName = tube ? tube.name : 'Trubka';
+  
+  const drawnPipe={
+    id,type:'drawn-pipe',name:pipeName,category:'drawn-pipe',
+    material,dn,length:len,note,
+    path:[...drawPath],
+    fromEl:fromElId,toEl:toElId,fromPort:fromPortIdx,toPort:toPortIdx,
+    isDirectConnection: false,
+    x:0,y:0
+  };
+  elements.push(drawnPipe);
+  renderDrawnPipe(drawnPipe);
+  
+  // Cleanup
+  if(tempLine){tempLine.remove();tempLine=null;}
+  tempNodes.forEach(n=>n.remove()); tempNodes=[];
+  drawPath=[]; drawStartEl=null; drawStartPortIdx=null; isDrawing=false;
+  document.body.classList.remove('drawing-mode');
+  document.getElementById('draw-btn').style.display='none';
+  document.querySelectorAll('.canvas-el').forEach(el=>el.style.boxShadow='');
+  document.getElementById('info-bar').textContent='Klikněte na modrý port pro kreslení | ☑ Zaškrtněte komponenty → pravé tlačítko → Vytvořit sestavu | Shift = rovné čáry';
+  updateBOM();
+}
+
+// ===== RENDER DRAWN PIPE =====
+// All coordinates converted from canvas-space to screen-space via toScreen()
+function renderDrawnPipe(pipe) {
+  // Remove existing elements
+  ['el-','label-'].forEach(pre=>{const d=document.getElementById(pre+pipe.id);if(d)d.remove();});
+  document.querySelectorAll(`.path-node[data-pipe-id="${pipe.id}"]`).forEach(n=>n.remove());
+
+  // Pro přímá spojení aktualizovat path podle aktuálních pozic portů
+  if(pipe.isDirectConnection || pipe.length === 0) {
+    if(pipe.fromEl !== undefined && pipe.fromPort !== undefined && 
+       pipe.toEl !== undefined && pipe.toPort !== undefined) {
+      const fromPos = getPortWorldPosition(pipe.fromEl, pipe.fromPort);
+      const toPos = getPortWorldPosition(pipe.toEl, pipe.toPort);
+      pipe.path = [fromPos, toPos];
+    }
+  }
+
+  const tube=TUBES.find(t=>t.id===pipe.material);
+  const color=tube?tube.color:'#888';
+
+  // Build screen-space path
+  const screenPts=pipe.path.map(p=>toScreen(p.x,p.y));
+  const pathD='M'+screenPts.map(p=>`${p.x},${p.y}`).join(' L');
+
+  // Main path
+  const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+  path.id='el-'+pipe.id;
+  path.setAttribute('d',pathD);
+  path.setAttribute('stroke',color);
+  // Přímá spojení jsou neviditelná (komponenty jsou přilepené)
+  const isDirectConn = pipe.isDirectConnection || pipe.length === 0;
+  path.setAttribute('stroke-width', isDirectConn ? '0' : '4');
+  path.setAttribute('fill','none');
+  path.setAttribute('stroke-linecap','round');
+  path.setAttribute('stroke-linejoin','round');
+  path.style.cursor='pointer';
+
+  const fromEl=elements.find(e=>e.id===pipe.fromEl);
+  const toEl=elements.find(e=>e.id===pipe.toEl);
+  const tip=document.createElementNS('http://www.w3.org/2000/svg','title');
+  if(pipe.isDirectConnection || pipe.length === 0) {
+    // Přímé spojení - jen zobrazit komponenty
+    tip.textContent=`Přímé spojení\n${fromEl?.name||'?'} → ${toEl?.name||'?'}`;
+  } else {
+    // Normální trubka s délkou
+    tip.textContent=`${pipe.name} ${pipe.dn} · ${pipe.length}m\n${fromEl?.name||'?'} → ${toEl?.name||'?'}`;
+  }
+  path.appendChild(tip);
+
+  // Midpoint label - jen pro normální trubky, ne pro přímé spojení
+  if(!pipe.isDirectConnection && pipe.length !== 0) {
+    const midIdx=Math.floor(screenPts.length/2);
+    const midPt=screenPts[midIdx]||screenPts[0];
+    const text=document.createElementNS('http://www.w3.org/2000/svg','text');
+    text.id='label-'+pipe.id;
+    text.setAttribute('x',midPt.x);
+    text.setAttribute('y',midPt.y-8);
+    text.setAttribute('text-anchor','middle');
+    text.setAttribute('fill',color);
+    text.setAttribute('font-size','11');
+    text.setAttribute('font-weight','bold');
+    text.setAttribute('paint-order','stroke');
+    text.setAttribute('stroke','#1a1f2e');
+    text.setAttribute('stroke-width','3');
+    text.style.pointerEvents='none';
+    text.textContent=`${pipe.dn}`;
+    connSvg.appendChild(text);
+  }
+
+  path.onmouseenter=()=>path.setAttribute('stroke-width','6');
+  path.onmouseleave=()=>path.setAttribute('stroke-width','4');
+  path.onclick=(e)=>{
+    e.stopPropagation();
+    if(isDrawing) return;
+    const isDirectConn = pipe.isDirectConnection || pipe.length === 0;
+    const confirmMsg = isDirectConn ? `Odpojit přímé spojení?` : `Smazat trubku?`;
+    if(e.ctrlKey||e.metaKey){if(confirm(confirmMsg))removeElement(pipe.id);}
+    else selectElement(pipe.id);
+  };
+
+  connSvg.appendChild(path);
+
+  // Editable waypoint nodes (screen-space divs) - jen pro trubky s trasou, ne pro přímé spojení
+  if(!pipe.isDirectConnection && pipe.length !== 0) {
+    for(let i=1;i<pipe.path.length-1;i++) {
+      const s=toScreen(pipe.path[i].x,pipe.path[i].y);
+      const node=document.createElement('div');
+      node.className='path-node';
+      node.dataset.pipeId=pipe.id;
+      node.dataset.nodeIdx=i;
+      node.style.left=s.x+'px';
+      node.style.top=s.y+'px';
+      node.addEventListener('mousedown',e=>{e.stopPropagation();dragNodePipeId=pipe.id;dragNodeIdx=i;});
+      document.getElementById('canvas-wrap').appendChild(node);
+    }
+  }
+}
+
+function toggleDrawMode() {
+  drawPath=[]; drawStartEl=null; drawStartPortIdx=null; isDrawing=false;
+  document.body.classList.remove('drawing-mode');
+  if(tempLine){tempLine.remove();tempLine=null;}
+  tempNodes.forEach(n=>n.remove()); tempNodes=[];
+  document.getElementById('draw-btn').style.display='none';
+  document.querySelectorAll('.canvas-el').forEach(el=>el.style.boxShadow='');
+  document.getElementById('info-bar').textContent='Klikněte na modrý port pro kreslení | ☑ Zaškrtněte komponenty → pravé tlačítko → Vytvořit sestavu | Shift = rovné čáry';
+}
+
+// ===== BOM =====
+function updateBOM() {
+  const counts={};
+  elements.forEach(el=>{
+    if(el.type==='drawn-pipe') {
+      // Přímé spojení (0m) není v BOM - fitinky se spojí přímo bez dalšího materiálu
+      if(el.length === 0 || el.isDirectConnection) {
+        return; // Skip - není fyzický materiál
+      }
+      // Trubky počítáme v metrech
+      const key=`${el.name} ${el.dn||'DN25'}`;
+      if(!counts[key]) counts[key] = {type: 'meters', value: 0};
+      counts[key].value += (el.length||1);
+    } else if(el.type!=='drawn-pipe') {
+      const key=el.name+(el.dn?' '+el.dn:'')+(el.material?' '+el.material:'');
+      if(!counts[key]) counts[key] = {type: 'pieces', value: 0};
+      counts[key].value += 1;
+    }
+  });
+  const list=document.getElementById('bom-list');
+  if(Object.keys(counts).length===0){list.innerHTML='<div style="font-size:12px;color:#4a5580;padding:4px 0">Žádné komponenty</div>';return;}
+  list.innerHTML=Object.entries(counts).map(([k,v])=>{
+    const disp = v.type === 'meters' ? v.value.toFixed(1)+'m' : v.value+'×';
+    return`<div class="bom-row"><span class="bom-name">${k}</span><span>${disp}</span></div>`;
+  }).join('');
+}
+
+function toggleBOM() {
+  const list=document.getElementById('bom-list');
+  const arrow=document.getElementById('bom-arrow');
+  list.classList.toggle('open');
+  arrow.textContent=list.classList.contains('open')?'▼':'▲';
+}
+
+// ===== SAVE/LOAD =====
+function exportJSON() {
+  const data=JSON.stringify({elements,connections,assemblies,nextId,nextAssemblyId,panX,panY,zoom},null,2);
+  const a=document.createElement('a');
+  a.href='data:application/json,'+encodeURIComponent(data);
+  a.download='otopna_soustava.json';
+  a.click();
+}
+
+function importJSON() { document.getElementById('file-input').click(); }
+
+function loadFile(e) {
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=(ev)=>{
+    try {
+      const data=JSON.parse(ev.target.result);
+      elements=data.elements||[]; connections=data.connections||[];
+      assemblies=data.assemblies||[];
+      nextId=data.nextId||1; nextAssemblyId=data.nextAssemblyId||1;
+      panX=data.panX||0; panY=data.panY||0; zoom=data.zoom||1;
+      
+      // Migrace starých redukcí - pokud nemají dn1 a dn2, vytvoříme je z dn
+      elements.forEach(el=>{
+        if(el.type==='redukce' && !el.dn1 && !el.dn2) {
+          el.dn1='DN25';
+          el.dn2='DN20';
+          if(el.dn) el.dn=`${el.dn1}/${el.dn2}`;
+        }
+      });
+      
+      canvas.innerHTML=''; connSvg.innerHTML='';
+      elements.forEach(el=>renderElement(el));
+      updateCanvasTransform(); drawGrid(); updateBOM(); updateAssemblyList();
+    } catch(err){alert('Chyba při načítání');}
+  };
+  r.readAsText(f); e.target.value='';
+}
+
+function clearAll() {
+  if(elements.length===0||confirm('Opravdu smazat vše?')) {
+    elements=[]; connections=[]; assemblies=[]; canvas.innerHTML=''; connSvg.innerHTML='';
+    selectedId=null; selectedIds=[];
+    document.getElementById('props-inner').innerHTML='<div class="no-sel">Vyberte prvek pro editaci</div>';
+    updateBOM(); updateAssemblyList();
+  }
+}
+
+document.addEventListener('keydown', e=>{
+  if(e.key==='Delete'&&selectedIds.length>0&&document.activeElement.tagName!=='INPUT') {
+    selectedIds.forEach(id => removeElement(id));
+    selectElement(null);
+  }
+  if(e.key==='Escape'){
+    selectElement(null);
+    hideContextMenu();
+    if(isDrawing) toggleDrawMode();
+    closeModal();
+  }
+  if(e.key==='r' && selectedIds.length > 0 && document.activeElement.tagName!=='INPUT') {
+    selectedIds.forEach(sid => {
+      const el = elements.find(x => x.id == sid);
+      if(el && el.type !== 'drawn-pipe') {
+        el.rotation = ((el.rotation || 0) + 90) % 360;
+        renderElement(el);
+      }
+    });
+    redrawAllPipes();
+  }
+});
+
+// ===== CONTEXT MENU & ASSEMBLIES =====
+function showContextMenu(x, y) {
+  let menu = document.getElementById('context-menu');
+  if(!menu) {
+    menu = document.createElement('div');
+    menu.id = 'context-menu';
+    document.body.appendChild(menu);
+  }
+  
+  // Build menu dynamically based on selection
+  let menuHtml = '';
+  
+  // If single element selected, show rotate and delete
+  if(selectedIds.length === 1) {
+    const el = elements.find(e => e.id === selectedIds[0]);
+    if(el && el.type !== 'drawn-pipe') {
+      menuHtml += '<div class="menu-item" onclick="rotateSelection()">↻ Otočit</div>';
+    }
+    menuHtml += '<div class="menu-item" onclick="deleteSelection()">× Smazat</div>';
+  }
+  
+  // If multiple elements selected, show delete all
+  if(selectedIds.length > 1) {
+    menuHtml += '<div class="menu-item" onclick="deleteSelection()">× Smazat vše</div>';
+  }
+  
+  // Always show "Create assembly" option
+  if(selectedIds.length > 0) {
+    menuHtml += '<div class="menu-item" onclick="createAssemblyFromSelection()">Vytvořit sestavu</div>';
+  }
+  
+  // If exactly 2 elements selected, check for direct connection between them
+  if(selectedIds.length === 2) {
+    const el1 = selectedIds[0];
+    const el2 = selectedIds[1];
+    const directConnection = elements.find(e => 
+      e.type === 'drawn-pipe' && 
+      (e.isDirectConnection || e.length === 0) &&
+      ((e.fromEl === el1 && e.toEl === el2) || (e.fromEl === el2 && e.toEl === el1))
+    );
+    
+    if(directConnection) {
+      menuHtml += '<div class="menu-item" onclick="disconnectSelection()">Rozdělit spojení</div>';
+    }
+  }
+  
+  menu.innerHTML = menuHtml;
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+  menu.style.display = 'block';
+}
+
+function hideContextMenu() {
+  const menu = document.getElementById('context-menu');
+  if(menu) menu.style.display = 'none';
+}
+
+function disconnectSelection() {
+  hideContextMenu();
+  if(selectedIds.length !== 2) return;
+  
+  const el1 = selectedIds[0];
+  const el2 = selectedIds[1];
+  
+  // Find direct connection between the two elements
+  const directConnection = elements.find(e => 
+    e.type === 'drawn-pipe' && 
+    (e.isDirectConnection || e.length === 0) &&
+    ((e.fromEl === el1 && e.toEl === el2) || (e.fromEl === el2 && e.toEl === el1))
+  );
+  
+  if(directConnection) {
+    if(confirm('Opravdu rozdělit přímé spojení mezi těmito komponenty?')) {
+      removeElement(directConnection.id);
+      // Re-render both elements to show ports again
+      const elem1 = elements.find(e => e.id === el1);
+      const elem2 = elements.find(e => e.id === el2);
+      if(elem1) renderElement(elem1);
+      if(elem2) renderElement(elem2);
+    }
+  }
+}
+
+function rotateSelection() {
+  hideContextMenu();
+  if(selectedIds.length !== 1) return;
+  
+  const el = elements.find(e => e.id === selectedIds[0]);
+  if(el && el.type !== 'drawn-pipe') {
+    el.rotation = ((el.rotation || 0) + 90) % 360;
+    renderElement(el);
+    redrawAllPipes();
+  }
+}
+
+function deleteSelection() {
+  hideContextMenu();
+  if(selectedIds.length === 0) return;
+  
+  // Copy array to avoid modification during iteration
+  const toDelete = [...selectedIds];
+  toDelete.forEach(id => removeElement(id));
+}
+
+function createAssemblyFromSelection() {
+  hideContextMenu();
+  if(selectedIds.length === 0) return;
+  
+  // Dialog pro pojmenování
+  const name = prompt('Zadejte název sestavy:', `Sestava ${nextAssemblyId}`);
+  if(!name) return;
+  
+  const assembly = {
+    id: nextAssemblyId++,
+    name: name,
+    elementIds: [...selectedIds],
+    createdAt: new Date().toISOString()
+  };
+  
+  assemblies.push(assembly);
+  updateAssemblyList();
+  // Nechat výběr zobrazený, aby uživatel viděl, co bylo přidáno
+  alert(`Sestava "${name}" vytvořena s ${assembly.elementIds.length} prvky`);
+}
+
+function updateAssemblyList() {
+  const list = document.getElementById('assembly-list');
+  if(!list) return;
+  
+  list.innerHTML = '';
+  assemblies.forEach(asm => {
+    const item = document.createElement('div');
+    item.className = 'assembly-item';
+    item.onclick = () => selectAssembly(asm.id);
+    item.innerHTML = `
+      <div>
+        <div class="name">${asm.name}</div>
+        <div class="count">${asm.elementIds.length} prvků</div>
+      </div>
+      <div class="assembly-btns">
+        <button onclick="event.stopPropagation(); generateAssemblyBOM(${asm.id})">BOM</button>
+        <button onclick="event.stopPropagation(); deleteAssembly(${asm.id})">×</button>
+      </div>
+    `;
+    list.appendChild(item);
+  });
+}
+
+function selectAssembly(asmId) {
+  const asm = assemblies.find(a => a.id === asmId);
+  if(!asm) return;
+  
+  // Nejprve vyčistit starý výběr
+  selectElement(null);
+  
+  // Vybrat všechny elementy ze sestavy
+  asm.elementIds.forEach(id => {
+    if(elements.find(e => e.id === id)) {
+      selectElement(id, true);
+    }
+  });
+  
+  // Explicitně aktualizovat checkboxy pro všechny vybrané elementy
+  document.querySelectorAll('.canvas-el').forEach(el => {
+    const elId = parseInt(el.id.replace('el-', ''));
+    const checkbox = el.querySelector('.el-checkbox');
+    if(checkbox) {
+      if(selectedIds.includes(elId)) {
+        checkbox.classList.add('checked');
+        el.classList.add('multi-selected');
+      } else {
+        checkbox.classList.remove('checked');
+        el.classList.remove('multi-selected');
+      }
+    }
+  });
+}
+
+function deleteAssembly(asmId) {
+  if(!confirm('Opravdu smazat tuto sestavu?')) return;
+  assemblies = assemblies.filter(a => a.id !== asmId);
+  updateAssemblyList();
+}
+
+function generateAssemblyBOM(asmId) {
+  const asm = assemblies.find(a => a.id === asmId);
+  if(!asm) return;
+  
+  const asmElements = elements.filter(e => asm.elementIds.includes(e.id));
+  const counts = {};
+  asmElements.forEach(el => {
+    if(el.type === 'drawn-pipe') {
+      // Přímé spojení (0m) není v BOM - fitinky se spojí přímo
+      if(el.length === 0 || el.isDirectConnection) {
+        return; // Skip
+      }
+      // Trubky jako metry
+      const key = `${el.name}|${el.dn || 'DN25'}|meters`;
+      counts[key] = (counts[key] || 0) + (el.length || 1);
+    } else {
+      const key = `${el.name || el.itemType}|${el.dn || ''}|${el.material || ''}|pieces`;
+      counts[key] = (counts[key] || 0) + 1;
+    }
+  });
+  
+  let bomHtml = `<h3>Kusovník: ${asm.name}</h3><div style="margin: 12px 0;">`;
+  Object.entries(counts).forEach(([key, qty]) => {
+    const parts = key.split('|');
+    const name = parts[0];
+    const dn = parts[1];
+    const materialOrType = parts[2];
+    const unit = parts[3] || materialOrType;
+    
+    const displayQty = unit === 'meters' ? qty.toFixed(1) + 'm' : qty + '×';
+    const displayDN = dn || '-';
+    
+    bomHtml += `<div class="bom-item"><span>${name}</span><span class="dn">${displayDN}</span><span class="qty">${displayQty}</span></div>`;
+  });
+  bomHtml += '</div>';
+  
+  const win = window.open('', '_blank', 'width=600,height=800');
+  win.document.write(`<html><head><title>BOM - ${asm.name}</title><style>body{font-family:sans-serif;padding:20px;background:#1a1f2e;color:#e0e4f0;}h3{color:#7eb8f7;}.bom-item{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;padding:8px;background:#1e2540;border-radius:4px;margin-bottom:4px;}.bom-item .dn{color:#7eb8f7;}.bom-item .qty{text-align:center;font-weight:600;color:#5abb8a;}</style></head><body>${bomHtml}</body></html>`);
+  win.document.close();
+}
+
+// Kliknutí kamkoliv zavře context menu
+document.addEventListener('click', hideContextMenu);
+
+init();
+</script>
+</body>
+</html>
