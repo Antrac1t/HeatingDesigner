@@ -348,8 +348,10 @@ let isPanning = false;
 let panStart = null;
 let dragEl = null, dragOffX = 0, dragOffY = 0;
 let dragElStartX = 0, dragElStartY = 0; // Store original position before drag
+let dragStartMouseX = 0, dragStartMouseY = 0; // Store mouse position at drag start
 let isDraggingMultiple = false;
 let dragStartPositions = new Map();
+let dragStartPipePaths = new Map(); // Store original pipe paths to prevent accumulation
 let drawPath = [];
 let tempLine = null;
 let tempNodes = [];
@@ -403,6 +405,7 @@ function buildSidebar() {
   });
 }
 
+// Snap to grid - 10px for fine alignment (half of minor grid line)
 function snapToGrid(v, g=10) { return Math.round(v/g)*g; }
 
 // Constrain point to horizontal or vertical line from prevPoint (for Shift+drag)
@@ -492,33 +495,84 @@ function setupCanvasEvents() {
       const c=toCanvas(e.clientX-rect.left, e.clientY-rect.top);
       
       if(isDraggingMultiple) {
-        // Pohyb celé skupiny
-        selectedIds.forEach(sid => {
-          const el = elements.find(x=>x.id==sid);
-          const startPos = dragStartPositions.get(sid);
-          if(el && startPos) {
-            const oldX = el.x;
-            const oldY = el.y;
-            el.x = snapToGrid(c.x - startPos.offsetX);
-            el.y = snapToGrid(c.y - startPos.offsetY);
-            const deltaX = el.x - oldX;
-            const deltaY = el.y - oldY;
-            renderElement(el);
-            updateConnectedPipes(sid, deltaX, deltaY);
-          }
-        });
+        // Pohyb celé skupiny - použít delta od začátku dragu
+        const deltaX = c.x - dragStartMouseX;
+        const deltaY = c.y - dragStartMouseY;
+        
+        // Pro první element vypočítat snappovanou pozici a použít tu delta pro všechny
+        const firstId = selectedIds[0];
+        const firstEl = elements.find(x=>x.id==firstId);
+        const firstStartPos = dragStartPositions.get(firstId);
+        if(firstEl && firstStartPos) {
+          // Calculate snapped position for first element
+          const firstNewX = snapToGrid(firstStartPos.x + deltaX);
+          const firstNewY = snapToGrid(firstStartPos.y + deltaY);
+          const commonDeltaX = firstNewX - firstStartPos.x;
+          const commonDeltaY = firstNewY - firstStartPos.y;
+          
+          // Apply same delta to all selected elements
+          selectedIds.forEach(sid => {
+            const el = elements.find(x=>x.id==sid);
+            const startPos = dragStartPositions.get(sid);
+            if(el && startPos) {
+              el.x = startPos.x + commonDeltaX;
+              el.y = startPos.y + commonDeltaY;
+              renderElement(el);
+            }
+          });
+          
+          // Update all pipes - use common delta
+          const movedSet = new Set(selectedIds);
+          const pipesToUpdate = new Set();
+          
+          // Find all pipes connected to any moved element
+          selectedIds.forEach(sid => {
+            elements.filter(e => 
+              e.type === 'drawn-pipe' && (e.fromEl === sid || e.toEl === sid)
+            ).forEach(pipe => pipesToUpdate.add(pipe));
+          });
+          
+          // Update each pipe once
+          pipesToUpdate.forEach(pipe => {
+            const fromMoved = movedSet.has(pipe.fromEl);
+            const toMoved = movedSet.has(pipe.toEl);
+            
+            if(fromMoved && toMoved) {
+              // Both ends moved - use original path + delta to prevent accumulation
+              const originalPath = dragStartPipePaths.get(pipe.id);
+              if(originalPath) {
+                pipe.path = originalPath.map(pt => ({
+                  x: snapToGrid(pt.x + commonDeltaX), 
+                  y: snapToGrid(pt.y + commonDeltaY)
+                }));
+              }
+            } else {
+              // Only one end moved - update that end
+              if(fromMoved && pipe.fromPort !== undefined) {
+                pipe.path[0] = getPortWorldPosition(pipe.fromEl, pipe.fromPort);
+              }
+              if(toMoved && pipe.toPort !== undefined) {
+                pipe.path[pipe.path.length - 1] = getPortWorldPosition(pipe.toEl, pipe.toPort);
+              }
+            }
+            renderDrawnPipe(pipe);
+          });
+        }
       } else {
         // Pohyb jednoho elementu
         const el=elements.find(x=>x.id==dragEl);
         if(el) {
           const oldX = el.x;
           const oldY = el.y;
-          el.x=snapToGrid(c.x-dragOffX);
-          el.y=snapToGrid(c.y-dragOffY);
-          const deltaX = el.x - oldX;
-          const deltaY = el.y - oldY;
+          // Calculate delta from drag start and snap the result
+          const deltaX = c.x - dragStartMouseX;
+          const deltaY = c.y - dragStartMouseY;
+          el.x = snapToGrid(dragElStartX + deltaX);
+          el.y = snapToGrid(dragElStartY + deltaY);
+          const actualDeltaX = el.x - oldX;
+          const actualDeltaY = el.y - oldY;
           renderElement(el);
-          updateConnectedPipes(dragEl, deltaX, deltaY);
+          updateConnectedPipes(dragEl, actualDeltaX, actualDeltaY);
         }
       }
     }
@@ -556,7 +610,7 @@ function setupCanvasEvents() {
     }
   });
 
-  window.addEventListener('mouseup', ()=>{ isPanning=false; dragEl=null; isDraggingMultiple=false; dragStartPositions.clear(); dragNodePipeId=null; dragNodeIdx=null; });
+  window.addEventListener('mouseup', ()=>{ isPanning=false; dragEl=null; isDraggingMultiple=false; dragStartPositions.clear(); dragStartPipePaths.clear(); dragNodePipeId=null; dragNodeIdx=null; });
 
   wrap.addEventListener('wheel', e=>{
     e.preventDefault();
@@ -873,21 +927,48 @@ function renderElement(el) {
     if(selectedIds.length > 1 && selectedIds.includes(el.id)) {
       isDraggingMultiple = true;
       dragStartPositions.clear();
+      dragStartPipePaths.clear();
       selectedIds.forEach(sid => {
         const selEl = elements.find(x=>x.id==sid);
         if(selEl) {
-          dragStartPositions.set(sid, {x: selEl.x, y: selEl.y, offsetX: c.x - selEl.x, offsetY: c.y - selEl.y});
+          // Store original positions for delta calculation
+          dragStartPositions.set(sid, {x: selEl.x, y: selEl.y});
         }
       });
+      
+      // Store original pipe paths for all pipes connected to selected elements
+      const movedSet = new Set(selectedIds);
+      selectedIds.forEach(sid => {
+        elements.filter(e => 
+          e.type === 'drawn-pipe' && (e.fromEl === sid || e.toEl === sid)
+        ).forEach(pipe => {
+          if(!dragStartPipePaths.has(pipe.id)) {
+            // Deep copy the path array
+            dragStartPipePaths.set(pipe.id, pipe.path.map(pt => ({x: pt.x, y: pt.y})));
+          }
+        });
+      });
+      
       dragEl = el.id;
-      dragOffX = c.x - el.x;
-      dragOffY = c.y - el.y;
+      dragStartMouseX = c.x;
+      dragStartMouseY = c.y;
+      dragElStartX = el.x;
+      dragElStartY = el.y;
     } else {
       dragEl=el.id;
-      dragOffX=c.x-el.x;
-      dragOffY=c.y-el.y;
-      dragElStartX=el.x; // Store original position
-      dragElStartY=el.y;
+      dragStartMouseX = c.x;
+      dragStartMouseY = c.y;
+      dragElStartX = el.x; // Store original position
+      dragElStartY = el.y;
+      
+      // Store original pipe paths for single element drag
+      dragStartPipePaths.clear();
+      elements.filter(e => 
+        e.type === 'drawn-pipe' && (e.fromEl === el.id || e.toEl === el.id)
+      ).forEach(pipe => {
+        // Deep copy the path array
+        dragStartPipePaths.set(pipe.id, pipe.path.map(pt => ({x: pt.x, y: pt.y})));
+      });
     }
   });
 
@@ -1440,12 +1521,34 @@ function updateConnectedPipes(elId, deltaX = null, deltaY = null) {
     );
     
     pipes.forEach(pipe => {
-      // Update the path start or end point using port positions
-      if(pipe.fromEl === movedElId && pipe.fromPort !== undefined) {
-        pipe.path[0] = getPortWorldPosition(movedElId, pipe.fromPort);
-      }
-      if(pipe.toEl === movedElId && pipe.toPort !== undefined) {
-        pipe.path[pipe.path.length - 1] = getPortWorldPosition(movedElId, pipe.toPort);
+      // Pokud jsou OBA konce trubky na elementech, které se pohybly, pohni i všechny waypoints
+      const fromMoved = movedElements.has(pipe.fromEl);
+      const toMoved = movedElements.has(pipe.toEl);
+      
+      if(fromMoved && toMoved && deltaX !== null && deltaY !== null) {
+        // Oba konce se pohybují - použít original path pokud existuje, jinak aktuální
+        const originalPath = dragStartPipePaths.get(pipe.id);
+        if(originalPath) {
+          // Use original path + delta to prevent accumulation
+          pipe.path = originalPath.map(pt => ({
+            x: snapToGrid(pt.x + deltaX), 
+            y: snapToGrid(pt.y + deltaY)
+          }));
+        } else {
+          // Fallback: move from current position (může způsobit problémy)
+          pipe.path = pipe.path.map(pt => ({
+            x: snapToGrid(pt.x + deltaX), 
+            y: snapToGrid(pt.y + deltaY)
+          }));
+        }
+      } else {
+        // Jen jeden konec se pohybuje - aktualizuj jen ten konec
+        if(pipe.fromEl === movedElId && pipe.fromPort !== undefined) {
+          pipe.path[0] = getPortWorldPosition(movedElId, pipe.fromPort);
+        }
+        if(pipe.toEl === movedElId && pipe.toPort !== undefined) {
+          pipe.path[pipe.path.length - 1] = getPortWorldPosition(movedElId, pipe.toPort);
+        }
       }
       
       // Re-render the pipe
@@ -2030,17 +2133,35 @@ function generateAssemblyBOM(asmId) {
   const asm = assemblies.find(a => a.id === asmId);
   if(!asm) return;
   
+  // Najít komponenty v sestavě
   const asmElements = elements.filter(e => asm.elementIds.includes(e.id));
+  
+  // Automaticky najít všechny trubky, které spojují komponenty v sestavě
+  const asmPipes = elements.filter(e => 
+    e.type === 'drawn-pipe' && 
+    e.fromEl !== undefined && e.toEl !== undefined &&
+    asm.elementIds.includes(e.fromEl) && asm.elementIds.includes(e.toEl)
+  );
+  
+  console.log('Assembly elements:', asmElements.length);
+  console.log('Assembly pipes:', asmPipes.length);
+  console.log('Pipes found:', asmPipes.map(p => ({id: p.id, from: p.fromEl, to: p.toEl, length: p.length})));
+  
+  // Spojit komponenty a trubky pro BOM
+  const allElements = [...asmElements, ...asmPipes];
+  
   const counts = {};
-  asmElements.forEach(el => {
+  allElements.forEach(el => {
     if(el.type === 'drawn-pipe') {
       // Přímé spojení (0m) není v BOM - fitinky se spojí přímo
       if(el.length === 0 || el.isDirectConnection) {
+        console.log('Skipping direct connection pipe:', el.id);
         return; // Skip
       }
       // Trubky jako metry
       const key = `${el.name}|${el.dn || 'DN25'}|meters`;
       counts[key] = (counts[key] || 0) + (el.length || 1);
+      console.log('Added pipe to BOM:', key, el.length);
     } else {
       const key = `${el.name || el.itemType}|${el.dn || ''}|${el.material || ''}|pieces`;
       counts[key] = (counts[key] || 0) + 1;
