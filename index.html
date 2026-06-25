@@ -1212,15 +1212,25 @@ function renderProps(id) {
     const fromEl=elements.find(e=>e.id===el.fromEl);
     const toEl=elements.find(e=>e.id===el.toEl);
     const isDirectConn = el.isDirectConnection || el.length === 0;
-    let html=`<div class="prop-row"><div class="prop-label">${isDirectConn ? 'Typ' : 'Materiál'}</div><div style="color:#c0c8e8;font-size:12px;padding:5px 0">${isDirectConn ? 'Přímé spojení' : el.name}</div></div>`;
-    html+=`<div class="prop-row"><div class="prop-label">DN</div><div style="color:#4a72c3;font-size:12px;font-weight:700;padding:5px 0">${el.dn}</div></div>`;
-    if(!isDirectConn) {
-      html+=`<div class="prop-row"><div class="prop-label">Délka</div><div style="color:#c0c8e8;font-size:12px;padding:5px 0">${el.length} m</div></div>`;
+    
+    if(isDirectConn) {
+      // Přímé spojení - jen čtení
+      let html=`<div class="prop-row"><div class="prop-label">Typ</div><div style="color:#c0c8e8;font-size:12px;padding:5px 0">Přímé spojení</div></div>`;
+      html+=`<div class="prop-row"><div class="prop-label">DN</div><div style="color:#4a72c3;font-size:12px;font-weight:700;padding:5px 0">${el.dn}</div></div>`;
+      html+=`<div class="prop-row"><div class="prop-label">Od</div><div style="color:#5abb8a;font-size:11px;padding:5px 0">${fromEl?.name||'?'}</div></div>`;
+      html+=`<div class="prop-row"><div class="prop-label">Do</div><div style="color:#5abb8a;font-size:11px;padding:5px 0">${toEl?.name||'?'}</div></div>`;
+      html+=`<div style="margin-top:12px"><button class="btn danger" style="width:100%" onclick="removeElement(${id})">🗑 Smazat</button></div>`;
+      document.getElementById('props-inner').innerHTML=html;
+    } else {
+      // Trubka s trasou - lze editovat
+      let html=`<div class="prop-row"><div class="prop-label">Materiál</div><select class="prop-select" onchange="updatePipeMaterial(${id},this.value)">${TUBES.map(t=>`<option value="${t.id}" ${el.material===t.id?'selected':''}>${t.name}</option>`).join('')}</select></div>`;
+      html+=`<div class="prop-row"><div class="prop-label">DN</div><select class="prop-select" onchange="updateProp(${id},'dn',this.value)">${DN_OPTIONS.map(d=>`<option ${el.dn===d?'selected':''}>${d}</option>`).join('')}</select></div>`;
+      html+=`<div class="prop-row"><div class="prop-label">Délka</div><div style="color:#c0c8e8;font-size:12px;padding:5px 0">${el.length.toFixed(1)} m</div></div>`;
+      html+=`<div class="prop-row"><div class="prop-label">Od</div><div style="color:#5abb8a;font-size:11px;padding:5px 0">${fromEl?.name||'?'}</div></div>`;
+      html+=`<div class="prop-row"><div class="prop-label">Do</div><div style="color:#5abb8a;font-size:11px;padding:5px 0">${toEl?.name||'?'}</div></div>`;
+      html+=`<div style="margin-top:12px"><button class="btn danger" style="width:100%" onclick="removeElement(${id})">🗑 Smazat</button></div>`;
+      document.getElementById('props-inner').innerHTML=html;
     }
-    html+=`<div class="prop-row"><div class="prop-label">Od</div><div style="color:#5abb8a;font-size:11px;padding:5px 0">${fromEl?.name||'?'}</div></div>`;
-    html+=`<div class="prop-row"><div class="prop-label">Do</div><div style="color:#5abb8a;font-size:11px;padding:5px 0">${toEl?.name||'?'}</div></div>`;
-    html+=`<div style="margin-top:12px"><button class="btn danger" style="width:100%" onclick="removeElement(${id})">🗑 Smazat</button></div>`;
-    document.getElementById('props-inner').innerHTML=html;
     return;
   }
 
@@ -1305,8 +1315,36 @@ function updateProp(id,prop,value) {
     el.dn=`${el.dn1||'DN25'}/${el.dn2||'DN25'}`;
   }
   
+  // Pokud se mění DN fitinky, aktualizovat DN všech připojených potrubí
+  if(prop==='dn' && el.type !== 'drawn-pipe' && !el.dn.includes('/')) {
+    const connectedPipes = elements.filter(e => 
+      e.type === 'drawn-pipe' && 
+      (e.fromEl === id || e.toEl === id)
+    );
+    
+    connectedPipes.forEach(pipe => {
+      pipe.dn = value;
+      renderDrawnPipe(pipe);
+    });
+  }
+  
   renderElement(el);
   redrawAllPipes();
+  updateBOM();
+}
+
+function updatePipeMaterial(id, materialId) {
+  const el = elements.find(e => e.id === id);
+  if(!el || el.type !== 'drawn-pipe') return;
+  
+  const tube = TUBES.find(t => t.id === materialId);
+  if(!tube) return;
+  
+  el.material = materialId;
+  el.name = tube.name;
+  
+  renderDrawnPipe(el);
+  renderProps(id);
   updateBOM();
 }
 
@@ -1552,16 +1590,29 @@ function getPortWorldPosition(elId, portIdx) {
   const portDef=PORT_DEFINITIONS[el.type];
   if(portDef&&portDef[portIdx]) {
     const port=portDef[portIdx];
+    
+    // Calculate non-rotated port position relative to SVG center
+    const portLocalX = svgSize.w/2 + port.x;
+    const portLocalY = svgSize.h/2 + port.y;
+    
+    // Apply rotation around SVG center
     const rotation=(el.rotation||0)*Math.PI/180;
-    const rotX=port.x*Math.cos(rotation)-port.y*Math.sin(rotation);
-    const rotY=port.x*Math.sin(rotation)+port.y*Math.cos(rotation);
+    const svgCenterX = svgSize.w/2;
+    const svgCenterY = svgSize.h/2;
+    const dx = portLocalX - svgCenterX;
+    const dy = portLocalY - svgCenterY;
+    const rotatedDx = dx*Math.cos(rotation) - dy*Math.sin(rotation);
+    const rotatedDy = dx*Math.sin(rotation) + dy*Math.cos(rotation);
+    
+    // Get label offset
     const dom=document.getElementById('el-'+elId);
     const labelWrap=dom?dom.querySelector('.el-label-wrap'):null;
     const labelH=labelWrap?labelWrap.offsetHeight:0;
     const labelMargin=24; // margin-bottom from CSS
+    
     return {
-      x: el.x + svgSize.w/2 + rotX,
-      y: el.y + labelH + labelMargin + svgSize.h/2 + rotY
+      x: el.x + svgCenterX + rotatedDx,
+      y: el.y + labelH + labelMargin + svgCenterY + rotatedDy
     };
   }
 
@@ -1692,13 +1743,23 @@ function calculatePathLength(path) {
 function createDirectConnection(fromElId, toElId, fromPortIdx, toPortIdx) {
   // Výchozí hodnoty pro přímé spojení
   const material = 'trubka-med'; // Měď
-  const dn = 'DN25';
+  
+  // Zjistit DN z fitek
+  const fromEl = elements.find(e => e.id === fromElId);
+  const toEl = elements.find(e => e.id === toElId);
+  let dn = 'DN25'; // Default
+  
+  // Použít DN z fromEl, pokud má
+  if(fromEl && fromEl.dn && !fromEl.dn.includes('/')) {
+    dn = fromEl.dn;
+  } else if(toEl && toEl.dn && !toEl.dn.includes('/')) {
+    dn = toEl.dn;
+  }
+  
   const len = 0; // Přímé spojení = 0m
   const note = '';
   const shouldSnap = true; // Vždy použít auto-snap
   
-  const fromEl = elements.find(e => e.id === fromElId);
-  const toEl = elements.find(e => e.id === toElId);
   let componentMoved = false;
   
   // Automatické přiblížení komponentů
@@ -1817,6 +1878,14 @@ function showDrawnPipeModal(fromElId, toElId, fromPortIdx, toPortIdx) {
   const fromEl = elements.find(e => e.id === fromElId);
   const toEl = elements.find(e => e.id === toElId);
   
+  // Zjistit DN z fitek
+  let defaultDN = 'DN25';
+  if(fromEl && fromEl.dn && !fromEl.dn.includes('/')) {
+    defaultDN = fromEl.dn;
+  } else if(toEl && toEl.dn && !toEl.dn.includes('/')) {
+    defaultDN = toEl.dn;
+  }
+  
   // Pro přímé spojení rovnou vytvoříme spojení bez modalu
   if(isDirectConnection) {
     createDirectConnection(fromElId, toElId, fromPortIdx, toPortIdx);
@@ -1825,7 +1894,7 @@ function showDrawnPipeModal(fromElId, toElId, fromPortIdx, toPortIdx) {
   
   // Pro trubky s trasou vytvoříme rovnou s defaultními hodnotami
   const material='trubka-med'; // Default: Měď
-  const dn='DN25'; // Default DN
+  const dn=defaultDN; // DN from fitting
   const len=pathLength;
   const note='';
   
