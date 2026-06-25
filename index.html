@@ -2970,30 +2970,61 @@ function alignSelection(direction) {
   const selectedElements = elements.filter(e => selectedIds.includes(e.id) && e.type !== 'drawn-pipe');
   if(selectedElements.length < 2) return;
   
-  // Get bounding values
+  // Get bounding boxes using actual DOM elements
+  const canvas = document.getElementById('canvas');
+  const canvasRect = canvas.getBoundingClientRect();
+  
+  const elementBounds = selectedElements.map(e => {
+    const dom = document.getElementById('el-' + e.id);
+    if(!dom) return null;
+    
+    // Get the SVG container (el-svg-wrap) for accurate bounds
+    const svgWrap = dom.querySelector('.el-svg-wrap');
+    const box = dom.querySelector('.el-box');
+    const targetEl = svgWrap || box || dom;
+    
+    const rect = targetEl.getBoundingClientRect();
+    
+    // Convert to canvas coordinates
+    const left = (rect.left - canvasRect.left) / zoom - panX;
+    const top = (rect.top - canvasRect.top) / zoom - panY;
+    const right = left + rect.width / zoom;
+    const bottom = top + rect.height / zoom;
+    
+    return { element: e, left, top, right, bottom, dom };
+  }).filter(b => b !== null);
+  
+  if(elementBounds.length < 2) return;
+  
+  // Get anchor value to align to
+  let anchorValue;
   if(direction === 'left') {
-    const minX = Math.min(...selectedElements.map(e => e.x));
-    selectedElements.forEach(e => {
-      e.x = minX;
-      renderElement(e);
+    anchorValue = Math.min(...elementBounds.map(b => b.left));
+    elementBounds.forEach(b => {
+      const offset = anchorValue - b.left;
+      b.element.x += offset;
+      renderElement(b.element);
     });
   } else if(direction === 'right') {
-    const maxX = Math.max(...selectedElements.map(e => e.x));
-    selectedElements.forEach(e => {
-      e.x = maxX;
-      renderElement(e);
+    anchorValue = Math.max(...elementBounds.map(b => b.right));
+    elementBounds.forEach(b => {
+      const offset = anchorValue - b.right;
+      b.element.x += offset;
+      renderElement(b.element);
     });
   } else if(direction === 'top') {
-    const minY = Math.min(...selectedElements.map(e => e.y));
-    selectedElements.forEach(e => {
-      e.y = minY;
-      renderElement(e);
+    anchorValue = Math.min(...elementBounds.map(b => b.top));
+    elementBounds.forEach(b => {
+      const offset = anchorValue - b.top;
+      b.element.y += offset;
+      renderElement(b.element);
     });
   } else if(direction === 'bottom') {
-    const maxY = Math.max(...selectedElements.map(e => e.y));
-    selectedElements.forEach(e => {
-      e.y = maxY;
-      renderElement(e);
+    anchorValue = Math.max(...elementBounds.map(b => b.bottom));
+    elementBounds.forEach(b => {
+      const offset = anchorValue - b.bottom;
+      b.element.y += offset;
+      renderElement(b.element);
     });
   }
   
