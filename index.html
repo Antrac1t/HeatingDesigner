@@ -2414,6 +2414,7 @@ function deleteProject(name) {
     
     if(currentProjectName === name) {
       currentProjectName = null;
+      localStorage.removeItem(AUTOSAVE_KEY);
     }
     
     updateSavedProjectsList();
@@ -2657,8 +2658,16 @@ function clearAll() {
   if(elements.length===0||confirm('Opravdu smazat vše?')) {
     elements=[]; connections=[]; assemblies=[]; canvas.innerHTML=''; connSvg.innerHTML='';
     selectedId=null; selectedIds=[];
+    currentProjectName = null;
+    localStorage.removeItem(AUTOSAVE_KEY);
     document.getElementById('props-inner').innerHTML='<div class="no-sel">Vyberte prvek pro editaci</div>';
-    updateBOM(); updateAssemblyList();
+    updateBOM(); updateAssemblyList(); updateSaveButton();
+    
+    const status = document.getElementById('autosave-status');
+    if(status) {
+      status.textContent = '';
+    }
+    
     markUnsavedChanges(); // Mark changes after clear
   }
 }
