@@ -125,6 +125,24 @@ body.drawing-mode .conn-port { pointer-events: all; }
 #context-menu { position: fixed; background: #1e2540; border: 1px solid #4a72c3; border-radius: 6px; padding: 4px; z-index: 1000; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
 #context-menu .menu-item { padding: 8px 16px; cursor: pointer; font-size: 12px; color: #c0c8e8; border-radius: 4px; white-space: nowrap; }
 #context-menu .menu-item:hover { background: #263060; color: #7eb8f7; }
+
+/* Project dropdown menu */
+#project-dropdown { position: relative; display: inline-block; }
+#project-menu { position: absolute; top: 100%; left: 0; background: #1e2540; border: 1px solid #4a72c3; border-radius: 6px; padding: 4px; z-index: 1000; display: none; min-width: 280px; max-height: 400px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.5); margin-top: 4px; }
+#project-menu.open { display: block; }
+#project-menu .menu-item { padding: 8px 12px; cursor: pointer; font-size: 12px; color: #c0c8e8; border-radius: 4px; white-space: nowrap; }
+#project-menu .menu-item:hover { background: #263060; color: #7eb8f7; }
+#project-menu .menu-divider { height: 1px; background: #2a3550; margin: 4px 0; }
+#project-menu .project-item { padding: 8px 12px; cursor: pointer; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+#project-menu .project-item:hover { background: #263060; }
+#project-menu .project-item.active { background: #1a2540; border-left: 3px solid #5abb8a; }
+#project-menu .project-info { flex: 1; min-width: 0; }
+#project-menu .project-name { font-size: 12px; color: #e0e4f0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#project-menu .project-date { font-size: 10px; color: #6a7590; }
+#project-menu .project-btns { display: flex; gap: 4px; }
+#project-menu .project-btns button { background: #263060; border: none; color: #7eb8f7; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; }
+#project-menu .project-btns button:hover { background: #304080; }
+#project-menu .no-projects { padding: 12px; text-align: center; font-size: 11px; color: #6a7590; }
 </style>
 </head>
 <body>
@@ -133,9 +151,31 @@ body.drawing-mode .conn-port { pointer-events: all; }
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 7h18M3 12h18M3 17h18" stroke="#7eb8f7" stroke-width="2" stroke-linecap="round"/></svg>
   <h1>Návrh Otopné Soustavy</h1>
   <div class="header-btns">
-    <button class="btn" onclick="exportJSON()">💾 Uložit</button>
-    <button class="btn" onclick="importJSON()">📂 Načíst</button>
+    <div id="project-dropdown">
+      <button class="btn" onclick="toggleProjectMenu()">📁 Projekt ▼</button>
+      <div id="project-menu">
+        <div class="menu-item" onclick="showSaveProjectDialog(); closeProjectMenu();">💾 Uložit jako...</div>
+        <div id="save-current-btn" class="menu-item" onclick="if(currentProjectName) saveProject(currentProjectName); else showSaveProjectDialog(); closeProjectMenu();">💾 Uložit</div>
+        <div class="menu-divider"></div>
+        <div class="menu-item" onclick="exportJSON(); closeProjectMenu();">📤 Export JSON</div>
+        <div class="menu-item" onclick="importJSON(); closeProjectMenu();">📥 Import JSON</div>
+        <div class="menu-divider"></div>
+        <div class="menu-item" style="padding: 8px 12px;">
+          <span style="color: #7eb8f7; font-size: 11px;">Autosave interval:</span>
+          <select onchange="setAutoSaveInterval(this.value)" id="autosave-interval-select" style="margin-left: 8px; background: #1a2540; color: #e0e4f0; border: 1px solid #4a72c3; border-radius: 3px; padding: 2px 6px; font-size: 11px;">
+            <option value="0">Vypnuto</option>
+            <option value="60">1 minuta</option>
+            <option value="180">3 minuty</option>
+            <option value="300" selected>5 minut</option>
+            <option value="600">10 minut</option>
+          </select>
+        </div>
+        <div class="menu-divider"></div>
+        <div id="project-menu-list"></div>
+      </div>
+    </div>
     <button class="btn danger" onclick="clearAll()">🗑 Vymazat vše</button>
+    <span id="autosave-status" style="font-size: 11px; color: #5abb8a; margin-left: 12px;"></span>
   </div>
 </div>
 
@@ -169,6 +209,8 @@ body.drawing-mode .conn-port { pointer-events: all; }
         <span>Kusovník</span><span id="bom-arrow">▲</span>
       </div>
       <div id="bom-list"></div>
+      <div id="bom-total" style="display:none;padding:8px 12px;border-top:2px solid #2a3555;margin-top:8px;font-weight:600;color:#5abb8a;"></div>
+      <button class="btn" style="width:100%;margin-top:8px;font-size:11px" onclick="openPriceEditor()">💰 Nastavit ceny</button>
     </div>
   </div>
 </div>
@@ -229,6 +271,7 @@ const SVGS = {
   'kotel-tuha-paliva': `<svg viewBox="0 0 60 48"><rect x="6" y="8" width="48" height="32" rx="4" fill="none" stroke="#e24b4a" stroke-width="2.5"/><circle cx="18" cy="42" r="2" fill="#e24b4a"/><circle cx="42" cy="42" r="2" fill="#4a72c3"/><text x="30" y="24" text-anchor="middle" fill="#e24b4a" font-size="8" font-weight="bold">TUHÁ</text><text x="30" y="32" text-anchor="middle" fill="#e24b4a" font-size="8" font-weight="bold">PALIVA</text></svg>`,
   'solarni-kolektor': `<svg viewBox="0 0 60 48"><rect x="6" y="8" width="48" height="32" rx="4" fill="none" stroke="#f7c77e" stroke-width="2.5"/><circle cx="18" cy="42" r="2" fill="#e24b4a"/><circle cx="42" cy="42" r="2" fill="#4a72c3"/><text x="30" y="28" text-anchor="middle" fill="#f7c77e" font-size="9" font-weight="bold">SOLÁR</text></svg>`,
   'vlnovec': `<svg viewBox="0 0 60 32"><path d="M 4 16 Q 10 8, 16 16 T 28 16 T 40 16 T 52 16 L 56 16" fill="none" stroke="#7eb8f7" stroke-width="2.5"/><circle cx="4" cy="16" r="2" fill="#7eb8f7"/><circle cx="56" cy="16" r="2" fill="#7eb8f7"/></svg>`,
+  'expanzni-nadoba': `<svg viewBox="0 0 40 48"><ellipse cx="20" cy="24" rx="14" ry="20" fill="none" stroke="#e24b4a" stroke-width="2.5"/><line x1="20" y1="4" x2="20" y2="0" stroke="#7eb8f7" stroke-width="3"/><circle cx="20" cy="0" r="2" fill="#7eb8f7"/><text x="20" y="28" text-anchor="middle" fill="#4a5580" font-size="8">EXP</text></svg>`,
 };
 
 const DN_OPTIONS = ['DN15','DN20','DN25','DN32','DN40','DN50','DN65','DN80','DN100'];
@@ -253,6 +296,7 @@ const SVG_SIZES = {
   'tepelne-cerpadlo': {w:60,h:48}, 'plynovy-kotel': {w:60,h:48}, 'kotel-tuha-paliva': {w:60,h:48},
   'solarni-kolektor': {w:60,h:48},
   'vlnovec': {w:60,h:32},
+  'expanzni-nadoba': {w:40,h:48},
 };
 
 const PORT_DEFINITIONS = {
@@ -278,6 +322,7 @@ const PORT_DEFINITIONS = {
   'rohovy-ventil': [{x:-20,y:0,angle:180},{x:0,y:20,angle:270}],
   'uzaviraci-shoupe': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0}],
   'vypousteni': [{x:0,y:-8,angle:90}],
+  'expanzni-nadoba': [{x:0,y:-24,angle:90}],
   'odvzdusnovaci': [{x:0,y:4,angle:270}],
   'odvzdusnovaci-auto': [{x:0,y:8,angle:270}],
   'pojistny-ventil': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0}],
@@ -327,6 +372,7 @@ const COMPONENTS = [
   {id:'filtr',name:'Filtr'},{id:'mag-filtr',name:'Magnetický filtr'},
   {id:'vodomer',name:'Vodoměr'},{id:'teplomer',name:'Teploměr'},{id:'manometr',name:'Manometr'},
   {id:'vlnovec',name:'Vlnovec'},
+  {id:'expanzni-nadoba',name:'Expanzní nádoba'},
   {id:'akumul',name:'Aku nádoba'},{id:'tuv',name:'TUV nádoba'},
   {id:'podlahovy-rozdelovac',name:'Podlahový rozdělovač'},
   {id:'otopne-teleso',name:'Otopné těleso'},{id:'registr',name:'Otopný registr'},
@@ -379,6 +425,25 @@ function init() {
   buildSidebar();
   drawGrid();
   setupCanvasEvents();
+  
+  // Load autosave interval setting
+  const savedInterval = localStorage.getItem(AUTOSAVE_INTERVAL_KEY);
+  if(savedInterval) {
+    autoSaveIntervalSeconds = parseInt(savedInterval);
+  }
+  
+  // Try to auto-load from localStorage
+  const loaded = autoLoad();
+  if(!loaded) {
+    // No autosave found, show empty state
+    console.log('No autosave found, starting fresh');
+  }
+  
+  // Update saved projects list
+  updateSavedProjectsList();
+  
+  // Start autosave interval
+  setAutoSaveInterval(autoSaveIntervalSeconds);
 }
 
 function buildSidebar() {
@@ -629,7 +694,12 @@ function setupCanvasEvents() {
     }
   });
 
-  window.addEventListener('mouseup', ()=>{ isPanning=false; dragEl=null; isDraggingMultiple=false; dragStartPositions.clear(); dragStartPipePaths.clear(); dragNodePipeId=null; dragNodeIdx=null; });
+  window.addEventListener('mouseup', ()=>{ 
+    const wasDragging = isPanning || dragEl !== null || isDraggingMultiple;
+    isPanning=false; dragEl=null; isDraggingMultiple=false; dragStartPositions.clear(); dragStartPipePaths.clear(); dragNodePipeId=null; dragNodeIdx=null; 
+    // Mark unsaved changes after drag/pan operations
+    if(wasDragging) markUnsavedChanges();
+  });
 
   wrap.addEventListener('wheel', e=>{
     e.preventDefault();
@@ -644,6 +714,7 @@ function setupCanvasEvents() {
     updateCanvasTransform();
     drawGrid();
     document.getElementById('zoom-level').textContent=`Zoom: ${Math.round(zoom*100)}%`;
+    markUnsavedChanges(); // Mark changes on zoom/pan
   },{passive:false});
 }
 
@@ -695,6 +766,10 @@ function addElement(type, name, category, x, y) {
   if(type==='tuv') {
     el.capacity=150;
     el.ports=[{side:'vlevo',pos:20,label:'Studená',dn:'DN25'},{side:'vlevo',pos:80,label:'Cirkulace',dn:'DN15'},{side:'vpravo',pos:50,label:'Teplá',dn:'DN25'}];
+  }
+  if(type==='expanzni-nadoba') {
+    el.capacity=25;
+    el.dn='DN25';
   }
   if(type==='podlahovy-rozdelovac') {
     el.circuits=4;
@@ -1204,6 +1279,12 @@ function renderProps(id) {
     });
     
     html+=`<button class="btn" style="width:100%;font-size:11px;padding:6px" onclick="addPortToEl(${id})">+ Přidat port</button></div>`;
+  }
+  
+  // Expanzní nádoba
+  if(el.type==='expanzni-nadoba') {
+    html+=`<div class="prop-row"><div class="prop-label">DN připojení</div><select class="prop-select" onchange="updateProp(${id},'dn',this.value)">${DN_OPTIONS.map(d=>`<option ${el.dn===d?'selected':''}>${d}</option>`).join('')}</select></div>`;
+    html+=`<div class="prop-row"><div class="prop-label">Objem (l)</div><input class="prop-input" type="number" value="${el.capacity||25}" oninput="updateProp(${id},'capacity',parseInt(this.value))"></div>`;
   }
   
   if(el.type==='podlahovy-rozdelovac') {
@@ -1902,11 +1983,48 @@ function updateBOM() {
     }
   });
   const list=document.getElementById('bom-list');
-  if(Object.keys(counts).length===0){list.innerHTML='<div style="font-size:12px;color:#4a5580;padding:4px 0">Žádné komponenty</div>';return;}
+  if(Object.keys(counts).length===0){
+    list.innerHTML='<div style="font-size:12px;color:#4a5580;padding:4px 0">Žádné komponenty</div>';
+    document.getElementById('bom-total').style.display='none';
+    return;
+  }
+  
+  // Load prices
+  const prices = getPriceList();
+  let totalPrice = 0;
+  let hasPrices = false;
+  
   list.innerHTML=Object.entries(counts).map(([k,v])=>{
+    const qty = v.type === 'meters' ? v.value : v.value;
     const disp = v.type === 'meters' ? v.value.toFixed(1)+'m' : v.value+'×';
-    return`<div class="bom-row"><span class="bom-name">${k}</span><span>${disp}</span></div>`;
+    const price = prices[k] || 0;
+    const itemTotal = price * qty;
+    
+    if(price > 0) {
+      hasPrices = true;
+      totalPrice += itemTotal;
+      return`<div class="bom-row">
+        <span class="bom-name">${k}</span>
+        <span style="display:flex;gap:8px;align-items:center">
+          <span>${disp}</span>
+          <span style="color:#5abb8a;font-size:10px">${itemTotal.toFixed(0)} Kč</span>
+        </span>
+      </div>`;
+    } else {
+      return`<div class="bom-row"><span class="bom-name">${k}</span><span>${disp}</span></div>`;
+    }
   }).join('');
+  
+  // Show total if we have any prices
+  const totalEl = document.getElementById('bom-total');
+  if(hasPrices) {
+    totalEl.style.display = 'block';
+    totalEl.textContent = `Celkem: ${totalPrice.toFixed(0)} Kč`;
+  } else {
+    totalEl.style.display = 'none';
+  }
+  
+  markUnsavedChanges(); // Mark changes after any BOM update
 }
 
 function toggleBOM() {
@@ -1916,7 +2034,586 @@ function toggleBOM() {
   arrow.textContent=list.classList.contains('open')?'▼':'▲';
 }
 
+// ===== PRICE MANAGEMENT =====
+function getPriceList() {
+  try {
+    const stored = localStorage.getItem(PRICE_LIST_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch(e) {
+    console.error('Failed to load price list:', e);
+    return {};
+  }
+}
+
+function savePriceList(prices) {
+  try {
+    localStorage.setItem(PRICE_LIST_KEY, JSON.stringify(prices));
+  } catch(e) {
+    console.error('Failed to save price list:', e);
+  }
+}
+
+function openPriceEditor() {
+  // Get current BOM items
+  const counts={};
+  elements.forEach(el=>{
+    if(el.type==='drawn-pipe') {
+      if(el.length === 0 || el.isDirectConnection) return;
+      const key=`${el.name} ${el.dn||'DN25'}`;
+      if(!counts[key]) counts[key] = {type: 'meters', value: 0};
+      counts[key].value += (el.length||1);
+    } else if(el.type!=='drawn-pipe') {
+      const key=el.name+(el.dn?' '+el.dn:'')+(el.material?' '+el.material:'');
+      if(!counts[key]) counts[key] = {type: 'pieces', value: 0};
+      counts[key].value += 1;
+    }
+  });
+  
+  if(Object.keys(counts).length === 0) {
+    alert('Kusovník je prázdný. Nejprve přidejte komponenty do projektu.');
+    return;
+  }
+  
+  const prices = getPriceList();
+  
+  // Create modal dialog
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center;
+    z-index: 10000;
+  `;
+  
+  const dialog = document.createElement('div');
+  dialog.style.cssText = `
+    background: #1a2540; border: 2px solid #4a72c3; border-radius: 8px;
+    padding: 20px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto;
+  `;
+  
+  let html = `
+    <h3 style="margin:0 0 16px 0;color:#7eb8f7;font-size:16px">💰 Nastavení cen</h3>
+    <div style="font-size:11px;color:#5a6a88;margin-bottom:16px">
+      Zadejte ceny pro použité komponenty v projektu. Ceny jsou v Kč za kus (nebo metr u trubek).
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+  `;
+  
+  Object.keys(counts).forEach(key => {
+    const unit = counts[key].type === 'meters' ? 'Kč/m' : 'Kč/ks';
+    const currentPrice = prices[key] || '';
+    html += `
+      <div style="display:flex;gap:8px;align-items:center;background:#12172a;padding:8px;border-radius:4px">
+        <span style="flex:1;font-size:12px;color:#c0c8e8">${key}</span>
+        <input 
+          type="number" 
+          min="0" 
+          step="0.01" 
+          placeholder="Cena"
+          value="${currentPrice}"
+          data-key="${key}"
+          style="width:100px;padding:4px 8px;background:#1a2540;border:1px solid #4a72c3;
+                 border-radius:3px;color:#e0e4f0;font-size:11px"
+        >
+        <span style="font-size:10px;color:#5a6a88;width:40px">${unit}</span>
+      </div>
+    `;
+  });
+  
+  html += `
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px;justify-content:space-between;align-items:center">
+      <div style="display:flex;gap:8px">
+        <button id="export-prices-btn" class="btn" style="font-size:11px;background:#2a3050">📤 Export</button>
+        <button id="import-prices-btn" class="btn" style="font-size:11px;background:#2a3050">📥 Import</button>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button id="cancel-price-btn" class="btn" style="background:#2a3050">Zrušit</button>
+        <button id="save-price-btn" class="btn">💾 Uložit</button>
+      </div>
+    </div>
+  `;
+  
+  dialog.innerHTML = html;
+  modal.appendChild(dialog);
+  document.body.appendChild(modal);
+  
+  // Close handlers
+  document.getElementById('cancel-price-btn').onclick = () => modal.remove();
+  modal.onclick = (e) => { if(e.target === modal) modal.remove(); };
+  
+  // Export handler
+  document.getElementById('export-prices-btn').onclick = () => {
+    const allPrices = getPriceList();
+    const json = JSON.stringify(allPrices, null, 2);
+    const blob = new Blob([json], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'cenik-topeni.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  
+  // Import handler
+  document.getElementById('import-prices-btn').onclick = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if(!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const imported = JSON.parse(ev.target.result);
+          savePriceList(imported);
+          alert('Ceník byl importován');
+          modal.remove();
+          openPriceEditor(); // Reopen with imported prices
+        } catch(err) {
+          alert('Chyba při importu ceníku: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+  
+  // Save handler
+  document.getElementById('save-price-btn').onclick = () => {
+    const inputs = dialog.querySelectorAll('input[data-key]');
+    const newPrices = {...prices};
+    
+    inputs.forEach(input => {
+      const key = input.dataset.key;
+      const value = parseFloat(input.value) || 0;
+      if(value > 0) {
+        newPrices[key] = value;
+      } else {
+        delete newPrices[key];
+      }
+    });
+    
+    savePriceList(newPrices);
+    updateBOM();
+    modal.remove();
+  };
+}
+
 // ===== SAVE/LOAD =====
+const AUTOSAVE_KEY = 'otopna_soustava_autosave';
+const PROJECTS_KEY = 'otopna_soustava_projects';
+const AUTOSAVE_INTERVAL_KEY = 'otopna_soustava_autosave_interval';
+const PRICE_LIST_KEY = 'otopna_soustava_prices';
+let autoSaveTimeout = null;
+let autoSaveIntervalId = null;
+let autoSaveIntervalSeconds = 300; // Default 5 minutes
+let currentProjectName = null;
+let hasUnsavedChanges = false;
+
+// Set autosave interval
+function setAutoSaveInterval(seconds) {
+  autoSaveIntervalSeconds = parseInt(seconds);
+  localStorage.setItem(AUTOSAVE_INTERVAL_KEY, autoSaveIntervalSeconds);
+  
+  // Update the select element to match
+  const select = document.getElementById('autosave-interval-select');
+  if(select) {
+    select.value = autoSaveIntervalSeconds;
+  }
+  
+  // Clear existing interval
+  if(autoSaveIntervalId) {
+    clearInterval(autoSaveIntervalId);
+    autoSaveIntervalId = null;
+  }
+  
+  // Set new interval if not disabled
+  if(autoSaveIntervalSeconds > 0) {
+    autoSaveIntervalId = setInterval(() => {
+      if(hasUnsavedChanges) {
+        performAutoSave();
+      }
+    }, autoSaveIntervalSeconds * 1000);
+    
+    const status = document.getElementById('autosave-status');
+    if(status) {
+      const minutes = Math.floor(autoSaveIntervalSeconds / 60);
+      status.textContent = `Autosave: každých ${minutes} min`;
+      status.style.color = '#5abb8a';
+    }
+  } else {
+    const status = document.getElementById('autosave-status');
+    if(status) {
+      status.textContent = 'Autosave: vypnuto';
+      status.style.color = '#f7c77e';
+    }
+  }
+}
+
+// Perform autosave
+function performAutoSave() {
+  try {
+    const data = {elements, connections, assemblies, nextId, nextAssemblyId, panX, panY, zoom, timestamp: new Date().toISOString()};
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data));
+    
+    // If we have a current project, also update it
+    if(currentProjectName) {
+      saveProject(currentProjectName);
+    }
+    
+    hasUnsavedChanges = false;
+    
+    // Update status indicator
+    const status = document.getElementById('autosave-status');
+    if(status) {
+      const now = new Date();
+      if(currentProjectName) {
+        status.textContent = `Projekt: ${currentProjectName} (uloženo ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')})`;
+      } else {
+        status.textContent = `Autosave: ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+      }
+      status.style.color = '#5abb8a';
+      setTimeout(() => { if(status && !currentProjectName) status.style.color = '#4a5580'; }, 3000);
+    }
+  } catch(e) {
+    console.error('Autosave failed:', e);
+  }
+}
+
+// Mark that changes were made
+function markUnsavedChanges() {
+  hasUnsavedChanges = true;
+  const status = document.getElementById('autosave-status');
+  if(status && currentProjectName) {
+    status.textContent = `Projekt: ${currentProjectName} (neuloženo)`;
+    status.style.color = '#f7c77e';
+  }
+}
+
+// Get all saved projects
+function getSavedProjects() {
+  try {
+    const saved = localStorage.getItem(PROJECTS_KEY);
+    return saved ? JSON.parse(saved) : {};
+  } catch(e) {
+    console.error('Failed to load projects:', e);
+    return {};
+  }
+}
+
+// Save project with name
+function saveProject(name) {
+  if(!name || name.trim() === '') {
+    alert('Zadejte název projektu');
+    return false;
+  }
+  
+  try {
+    const projects = getSavedProjects();
+    const data = {
+      elements, 
+      connections, 
+      assemblies, 
+      nextId, 
+      nextAssemblyId, 
+      panX, 
+      panY, 
+      zoom, 
+      timestamp: new Date().toISOString(),
+      name: name.trim()
+    };
+    
+    projects[name.trim()] = data;
+    localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+    currentProjectName = name.trim();
+    hasUnsavedChanges = false;
+    updateSavedProjectsList();
+    updateSaveButton();
+    
+    const status = document.getElementById('autosave-status');
+    if(status) {
+      status.textContent = `Projekt "${name.trim()}" uložen`;
+      status.style.color = '#5abb8a';
+    }
+    
+    return true;
+  } catch(e) {
+    console.error('Failed to save project:', e);
+    alert('Chyba při ukládání projektu. Možná je plná paměť (localStorage limit ~5-10MB).');
+    return false;
+  }
+}
+
+// Load project by name
+function loadProject(name) {
+  try {
+    const projects = getSavedProjects();
+    const project = projects[name];
+    
+    if(!project) {
+      alert('Projekt nebyl nalezen');
+      return false;
+    }
+    
+    // Load data
+    elements = project.elements || [];
+    connections = project.connections || [];
+    assemblies = project.assemblies || [];
+    nextId = project.nextId || 1;
+    nextAssemblyId = project.nextAssemblyId || 1;
+    panX = project.panX || 0;
+    panY = project.panY || 0;
+    zoom = project.zoom || 1;
+    currentProjectName = name;
+    
+    // Migrace starých redukcí
+    elements.forEach(el => {
+      if(el.type === 'redukce' && !el.dn1 && !el.dn2) {
+        el.dn1 = 'DN25';
+        el.dn2 = 'DN20';
+        if(el.dn) el.dn = `${el.dn1}/${el.dn2}`;
+      }
+    });
+    
+    // Render
+    canvas.innerHTML = '';
+    connSvg.innerHTML = '';
+    elements.forEach(el => renderElement(el));
+    updateCanvasTransform();
+    drawGrid();
+    updateBOM();
+    updateAssemblyList();
+    updateSavedProjectsList();
+    updateSaveButton();
+    
+    const status = document.getElementById('autosave-status');
+    if(status) {
+      const loadTime = new Date(project.timestamp);
+      status.textContent = `Projekt: ${name}`;
+      status.style.color = '#7eb8f7';
+    }
+    
+    return true;
+  } catch(e) {
+    console.error('Failed to load project:', e);
+    alert('Chyba při načítání projektu');
+    return false;
+  }
+}
+
+// Delete project
+function deleteProject(name) {
+  if(!confirm(`Opravdu smazat projekt "${name}"?`)) return;
+  
+  try {
+    const projects = getSavedProjects();
+    delete projects[name];
+    localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+    
+    if(currentProjectName === name) {
+      currentProjectName = null;
+    }
+    
+    updateSavedProjectsList();
+    updateSaveButton();
+    
+    const status = document.getElementById('autosave-status');
+    if(status) {
+      status.textContent = `Projekt "${name}" smazán`;
+      status.style.color = '#f7c77e';
+    }
+  } catch(e) {
+    console.error('Failed to delete project:', e);
+  }
+}
+
+// Show save dialog
+function showSaveProjectDialog() {
+  const name = prompt('Zadejte název projektu:', currentProjectName || 'Nový projekt');
+  if(name) {
+    saveProject(name);
+  }
+}
+
+// Update saved projects list in sidebar
+function updateSavedProjectsList() {
+  const list = document.getElementById('project-menu-list');
+  if(!list) return;
+  
+  const projects = getSavedProjects();
+  const projectNames = Object.keys(projects).sort();
+  
+  if(projectNames.length === 0) {
+    list.innerHTML = '<div class="no-projects">Nejsou uložené žádné projekty</div>';
+    return;
+  }
+  
+  list.innerHTML = projectNames.map(name => {
+    const project = projects[name];
+    const date = new Date(project.timestamp);
+    const dateStr = `${date.getDate()}.${date.getMonth()+1}. ${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`;
+    const isCurrent = currentProjectName === name;
+    const escapedName = name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    
+    return `
+      <div class="project-item ${isCurrent ? 'active' : ''}">
+        <div class="project-info" onclick="loadProject('${escapedName}'); closeProjectMenu();">
+          <div class="project-name">${name}</div>
+          <div class="project-date">${dateStr}</div>
+        </div>
+        <div class="project-btns">
+          <button onclick="event.stopPropagation(); if(saveProject('${escapedName}')) closeProjectMenu();" title="Přepsat">💾</button>
+          <button onclick="event.stopPropagation(); deleteProject('${escapedName}');" title="Smazat">×</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Toggle project menu
+function toggleProjectMenu() {
+  const menu = document.getElementById('project-menu');
+  if(!menu) return;
+  
+  const isOpen = menu.classList.contains('open');
+  
+  // Close any other open menus
+  hideContextMenu();
+  
+  if(isOpen) {
+    menu.classList.remove('open');
+  } else {
+    updateSavedProjectsList();
+    updateSaveButton();
+    
+    // Update interval select
+    const select = document.getElementById('autosave-interval-select');
+    if(select) {
+      select.value = autoSaveIntervalSeconds;
+    }
+    
+    menu.classList.add('open');
+  }
+}
+
+// Close project menu
+function closeProjectMenu() {
+  const menu = document.getElementById('project-menu');
+  if(menu) menu.classList.remove('open');
+}
+
+// Update save button text based on current project
+function updateSaveButton() {
+  const btn = document.getElementById('save-current-btn');
+  if(btn) {
+    if(currentProjectName) {
+      btn.textContent = `💾 Uložit (${currentProjectName})`;
+    } else {
+      btn.textContent = '💾 Uložit';
+    }
+  }
+}
+
+// Close project menu when clicking outside
+document.addEventListener('click', (e) => {
+  const dropdown = document.getElementById('project-dropdown');
+  if(dropdown && !dropdown.contains(e.target)) {
+    closeProjectMenu();
+  }
+});
+
+// Auto-save to localStorage with debounce
+function autoSave() {
+  clearTimeout(autoSaveTimeout);
+  autoSaveTimeout = setTimeout(() => {
+    try {
+      const data = {elements, connections, assemblies, nextId, nextAssemblyId, panX, panY, zoom, timestamp: new Date().toISOString()};
+      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data));
+      
+      // If we have a current project, also update it
+      if(currentProjectName) {
+        saveProject(currentProjectName);
+        return; // saveProject already updates status
+      }
+      
+      // Update status indicator
+      const status = document.getElementById('autosave-status');
+      if(status) {
+        const now = new Date();
+        status.textContent = `Autosave: ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+        status.style.color = '#4a5580';
+      }
+    } catch(e) {
+      console.error('Autosave failed:', e);
+    }
+  }, 1000); // 1s debounce
+}
+
+// Auto-load from localStorage on init
+function autoLoad() {
+  try {
+    const saved = localStorage.getItem(AUTOSAVE_KEY);
+    if(!saved) return false;
+    
+    const data = JSON.parse(saved);
+    elements = data.elements || [];
+    connections = data.connections || [];
+    assemblies = data.assemblies || [];
+    nextId = data.nextId || 1;
+    nextAssemblyId = data.nextAssemblyId || 1;
+    panX = data.panX || 0;
+    panY = data.panY || 0;
+    zoom = data.zoom || 1;
+    
+    // Migrace starých redukcí
+    elements.forEach(el => {
+      if(el.type === 'redukce' && !el.dn1 && !el.dn2) {
+        el.dn1 = 'DN25';
+        el.dn2 = 'DN20';
+        if(el.dn) el.dn = `${el.dn1}/${el.dn2}`;
+      }
+    });
+    
+    canvas.innerHTML = '';
+    connSvg.innerHTML = '';
+    elements.forEach(el => renderElement(el));
+    updateCanvasTransform();
+    drawGrid();
+    updateBOM();
+    updateAssemblyList();
+    
+    // Show load status
+    const status = document.getElementById('autosave-status');
+    if(status && data.timestamp) {
+      const loadTime = new Date(data.timestamp);
+      status.textContent = `Načteno z ${loadTime.toLocaleDateString()} ${loadTime.getHours().toString().padStart(2,'0')}:${loadTime.getMinutes().toString().padStart(2,'0')}`;
+      status.style.color = '#7eb8f7';
+    }
+    
+    return true;
+  } catch(e) {
+    console.error('Autoload failed:', e);
+    return false;
+  }
+}
+
+// Clear autosave
+function clearAutoSave() {
+  if(confirm('Vymazat automaticky uložená data a všechny uložené projekty z tohoto prohlížeče?')) {
+    localStorage.removeItem(AUTOSAVE_KEY);
+    localStorage.removeItem(PROJECTS_KEY);
+    currentProjectName = null;
+    updateSavedProjectsList();
+    const status = document.getElementById('autosave-status');
+    if(status) {
+      status.textContent = 'Všechna data vymazána';
+      status.style.color = '#f7c77e';
+    }
+  }
+}
+
 function exportJSON() {
   const data=JSON.stringify({elements,connections,assemblies,nextId,nextAssemblyId,panX,panY,zoom},null,2);
   const a=document.createElement('a');
@@ -1950,6 +2647,7 @@ function loadFile(e) {
       canvas.innerHTML=''; connSvg.innerHTML='';
       elements.forEach(el=>renderElement(el));
       updateCanvasTransform(); drawGrid(); updateBOM(); updateAssemblyList();
+      markUnsavedChanges(); // Mark as changed after import
     } catch(err){alert('Chyba při načítání');}
   };
   r.readAsText(f); e.target.value='';
@@ -1961,6 +2659,7 @@ function clearAll() {
     selectedId=null; selectedIds=[];
     document.getElementById('props-inner').innerHTML='<div class="no-sel">Vyberte prvek pro editaci</div>';
     updateBOM(); updateAssemblyList();
+    markUnsavedChanges(); // Mark changes after clear
   }
 }
 
@@ -2008,9 +2707,14 @@ function showContextMenu(x, y) {
     menuHtml += '<div class="menu-item" onclick="deleteSelection()">× Smazat</div>';
   }
   
-  // If multiple elements selected, show delete all
+  // If multiple elements selected, show delete all and alignment options
   if(selectedIds.length > 1) {
     menuHtml += '<div class="menu-item" onclick="deleteSelection()">× Smazat vše</div>';
+    menuHtml += '<div class="menu-divider"></div>';
+    menuHtml += '<div class="menu-item" onclick="alignSelection(\'left\')">⬅ Zarovnat vlevo</div>';
+    menuHtml += '<div class="menu-item" onclick="alignSelection(\'right\')">➡ Zarovnat vpravo</div>';
+    menuHtml += '<div class="menu-item" onclick="alignSelection(\'top\')">⬆ Zarovnat nahoru</div>';
+    menuHtml += '<div class="menu-item" onclick="alignSelection(\'bottom\')">⬇ Zarovnat dolů</div>';
   }
   
   // Always show "Create assembly" option
@@ -2091,6 +2795,44 @@ function deleteSelection() {
   toDelete.forEach(id => removeElement(id));
 }
 
+function alignSelection(direction) {
+  hideContextMenu();
+  if(selectedIds.length < 2) return;
+  
+  const selectedElements = elements.filter(e => selectedIds.includes(e.id) && e.type !== 'drawn-pipe');
+  if(selectedElements.length < 2) return;
+  
+  // Get bounding values
+  if(direction === 'left') {
+    const minX = Math.min(...selectedElements.map(e => e.x));
+    selectedElements.forEach(e => {
+      e.x = minX;
+      renderElement(e);
+    });
+  } else if(direction === 'right') {
+    const maxX = Math.max(...selectedElements.map(e => e.x));
+    selectedElements.forEach(e => {
+      e.x = maxX;
+      renderElement(e);
+    });
+  } else if(direction === 'top') {
+    const minY = Math.min(...selectedElements.map(e => e.y));
+    selectedElements.forEach(e => {
+      e.y = minY;
+      renderElement(e);
+    });
+  } else if(direction === 'bottom') {
+    const maxY = Math.max(...selectedElements.map(e => e.y));
+    selectedElements.forEach(e => {
+      e.y = maxY;
+      renderElement(e);
+    });
+  }
+  
+  redrawAllPipes();
+  markUnsavedChanges();
+}
+
 function createAssemblyFromSelection() {
   hideContextMenu();
   if(selectedIds.length === 0) return;
@@ -2108,6 +2850,7 @@ function createAssemblyFromSelection() {
   
   assemblies.push(assembly);
   updateAssemblyList();
+  markUnsavedChanges();
   // Nechat výběr zobrazený, aby uživatel viděl, co bylo přidáno
   alert(`Sestava "${name}" vytvořena s ${assembly.elementIds.length} prvky`);
 }
@@ -2169,6 +2912,7 @@ function deleteAssembly(asmId) {
   if(!confirm('Opravdu smazat tuto sestavu?')) return;
   assemblies = assemblies.filter(a => a.id !== asmId);
   updateAssemblyList();
+  markUnsavedChanges();
 }
 
 function generateAssemblyBOM(asmId) {
@@ -2210,6 +2954,11 @@ function generateAssemblyBOM(asmId) {
     }
   });
   
+  // Load prices
+  const prices = getPriceList();
+  let totalPrice = 0;
+  let hasPrices = false;
+  
   let bomHtml = `<h3>Kusovník: ${asm.name}</h3><div style="margin: 12px 0;">`;
   Object.entries(counts).forEach(([key, qty]) => {
     const parts = key.split('|');
@@ -2221,12 +2970,28 @@ function generateAssemblyBOM(asmId) {
     const displayQty = unit === 'meters' ? qty.toFixed(1) + 'm' : qty + '×';
     const displayDN = dn || '-';
     
-    bomHtml += `<div class="bom-item"><span>${name}</span><span class="dn">${displayDN}</span><span class="qty">${displayQty}</span></div>`;
+    // Calculate price
+    const priceKey = name + (dn ? ' ' + dn : '') + (materialOrType && materialOrType !== 'pieces' && materialOrType !== 'meters' ? ' ' + materialOrType : '');
+    const price = prices[priceKey] || 0;
+    const itemTotal = price * qty;
+    
+    let priceHtml = '';
+    if(price > 0) {
+      hasPrices = true;
+      totalPrice += itemTotal;
+      priceHtml = `<span class="price">${itemTotal.toFixed(0)} Kč</span>`;
+    }
+    
+    bomHtml += `<div class="bom-item"><span>${name}</span><span class="dn">${displayDN}</span><span class="qty">${displayQty}</span>${priceHtml}</div>`;
   });
   bomHtml += '</div>';
   
+  if(hasPrices) {
+    bomHtml += `<div style="border-top:2px solid #4a72c3;padding-top:12px;margin-top:12px;font-size:18px;font-weight:700;color:#5abb8a;text-align:right">Celkem: ${totalPrice.toFixed(0)} Kč</div>`;
+  }
+  
   const win = window.open('', '_blank', 'width=600,height=800');
-  win.document.write(`<html><head><title>BOM - ${asm.name}</title><style>body{font-family:sans-serif;padding:20px;background:#1a1f2e;color:#e0e4f0;}h3{color:#7eb8f7;}.bom-item{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;padding:8px;background:#1e2540;border-radius:4px;margin-bottom:4px;}.bom-item .dn{color:#7eb8f7;}.bom-item .qty{text-align:center;font-weight:600;color:#5abb8a;}</style></head><body>${bomHtml}</body></html>`);
+  win.document.write(`<html><head><title>BOM - ${asm.name}</title><style>body{font-family:sans-serif;padding:20px;background:#1a1f2e;color:#e0e4f0;}h3{color:#7eb8f7;}.bom-item{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:8px;padding:8px;background:#1e2540;border-radius:4px;margin-bottom:4px;}.bom-item .dn{color:#7eb8f7;}.bom-item .qty{text-align:center;font-weight:600;color:#5abb8a;}.bom-item .price{text-align:right;color:#5abb8a;font-weight:600;}</style></head><body>${bomHtml}</body></html>`);
   win.document.close();
 }
 
