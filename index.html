@@ -408,6 +408,25 @@ function buildSidebar() {
 // Snap to grid - 10px for fine alignment (half of minor grid line)
 function snapToGrid(v, g=10) { return Math.round(v/g)*g; }
 
+// Generate dynamic SVG for floor heating distributor based on circuits
+function generateDistributorSVG(circuits) {
+  circuits = circuits || 4;
+  const height = 40 + circuits * 12; // Dynamic height based on circuits
+  const width = 70;
+  const topMargin = 10;
+  const bottomMargin = 10;
+  const usableHeight = height - topMargin - bottomMargin;
+  
+  return `<svg viewBox="0 0 ${width} ${height}"><line x1="35" y1="${topMargin}" x2="35" y2="${height - bottomMargin}" stroke="#7eb8f7" stroke-width="8" stroke-linecap="round"/><line x1="35" y1="0" x2="35" y2="${topMargin}" stroke="#e24b4a" stroke-width="4" stroke-linecap="round"/><line x1="35" y1="${height - bottomMargin}" x2="35" y2="${height}" stroke="#4a72c3" stroke-width="4" stroke-linecap="round"/></svg>`;
+}
+
+// Get dynamic size for floor heating distributor
+function getDistributorSize(circuits) {
+  circuits = circuits || 4;
+  const height = 40 + circuits * 12;
+  return {w: 70, h: height};
+}
+
 // Constrain point to horizontal or vertical line from prevPoint (for Shift+drag)
 function constrainToOrtho(point, prevPoint) {
   if(!prevPoint) return point;
@@ -680,9 +699,14 @@ function addElement(type, name, category, x, y) {
   if(type==='podlahovy-rozdelovac') {
     el.circuits=4;
     el.ports=[];
-    const spacing=70/(el.circuits+1);
+    // Calculate usable space for ports (10% top margin, 10% bottom margin)
+    const topMargin = 10;
+    const bottomMargin = 10;
+    const usableRange = 100 - topMargin - bottomMargin; // 80%
+    
     for(let i=0;i<el.circuits;i++){
-      const pos=15+(i*15);
+      // Distribute ports evenly in usable space
+      const pos = topMargin + (usableRange / (el.circuits + 1)) * (i + 1);
       el.ports.push({side:'vlevo',pos,label:`Teplé ${i+1}`,dn:'DN20',type:'teple'});
       el.ports.push({side:'vpravo',pos,label:`Studené ${i+1}`,dn:'DN20',type:'studene'});
     }
@@ -812,17 +836,28 @@ function renderElement(el) {
 
       const svgWrap=document.createElement('div');
       svgWrap.className='el-svg-wrap';
-      svgWrap.innerHTML=SVGS[el.type]||'';
+      
+      // For podlahovy-rozdelovac, generate dynamic SVG
+      if(el.type === 'podlahovy-rozdelovac') {
+        svgWrap.innerHTML = generateDistributorSVG(el.circuits);
+      } else {
+        svgWrap.innerHTML = SVGS[el.type]||'';
+      }
+      
       svgWrap.style.transform=`rotate(${el.rotation||0}deg)`;
       svgWrap.style.transformOrigin='center center';
-      const svgSize=SVG_SIZES[el.type]||{w:48,h:48};
+      
+      // For podlahovy-rozdelovac, get dynamic size
+      const svgSize = el.type === 'podlahovy-rozdelovac' ? getDistributorSize(el.circuits) : (SVG_SIZES[el.type]||{w:48,h:48});
+      
       const svgEl=svgWrap.querySelector('svg');
       if(svgEl){svgEl.setAttribute('width',svgSize.w);svgEl.setAttribute('height',svgSize.h);}
       box.appendChild(svgWrap);
 
       // Add ports - pro akumul/TUV/rozdelovac z el.ports pole
       if((el.type==='akumul'||el.type==='tuv'||el.type==='podlahovy-rozdelovac') && el.ports && el.ports.length>0) {
-        const svgSize=SVG_SIZES[el.type]||{w:48,h:48};
+        // For podlahovy-rozdelovac, get dynamic size
+        const svgSize = el.type === 'podlahovy-rozdelovac' ? getDistributorSize(el.circuits) : (SVG_SIZES[el.type]||{w:48,h:48});
         const centerX=svgSize.w/2;
         const centerY=svgSize.h/2;
         
@@ -1257,9 +1292,15 @@ function updateCircuits(id,circuits) {
   if(!el||el.type!=='podlahovy-rozdelovac') return;
   el.circuits=Math.max(1,Math.min(12,circuits));
   el.ports=[];
-  const spacing=70/(el.circuits+1);
+  
+  // Calculate usable space for ports (10% top margin, 10% bottom margin)
+  const topMargin = 10;
+  const bottomMargin = 10;
+  const usableRange = 100 - topMargin - bottomMargin; // 80%
+  
   for(let i=0;i<el.circuits;i++) {
-    const pos=15+(i*15);
+    // Distribute ports evenly in usable space
+    const pos = topMargin + (usableRange / (el.circuits + 1)) * (i + 1);
     el.ports.push({side:'vlevo',pos,label:`Teplé ${i+1}`,dn:'DN20',type:'teple'});
     el.ports.push({side:'vpravo',pos,label:`Studené ${i+1}`,dn:'DN20',type:'studene'});
   }
@@ -1346,7 +1387,8 @@ function getPortWorldPosition(elId, portIdx) {
   }
 
   // FALLBACK: Calculate position (for ports that may not be rendered)
-  const svgSize=SVG_SIZES[el.type]||{w:48,h:48};
+  // For podlahovy-rozdelovac, get dynamic size
+  const svgSize = el.type === 'podlahovy-rozdelovac' ? getDistributorSize(el.circuits) : (SVG_SIZES[el.type]||{w:48,h:48});
   const svgWrap=dom.querySelector('.el-svg-wrap');
   
   // For tanks (akumul/TUV) with el.ports array but without svgWrap
