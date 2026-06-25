@@ -170,6 +170,16 @@ body.drawing-mode .conn-port { pointer-events: all; }
             <option value="600">10 minut</option>
           </select>
         </div>
+        <div class="menu-item" style="padding: 8px 12px;">
+          <span style="color: #7eb8f7; font-size: 11px;">Velikost mřížky:</span>
+          <select onchange="setGridSize(this.value)" id="grid-size-select" style="margin-left: 8px; background: #1a2540; color: #e0e4f0; border: 1px solid #4a72c3; border-radius: 3px; padding: 2px 6px; font-size: 11px;">
+            <option value="2">2px</option>
+            <option value="3">3px</option>
+            <option value="4">4px</option>
+            <option value="5">5px</option>
+            <option value="10" selected>10px</option>
+          </select>
+        </div>
         <div class="menu-divider"></div>
         <div id="project-menu-list"></div>
       </div>
@@ -272,6 +282,7 @@ const SVGS = {
   'solarni-kolektor': `<svg viewBox="0 0 60 48"><rect x="6" y="8" width="48" height="32" rx="4" fill="none" stroke="#f7c77e" stroke-width="2.5"/><circle cx="18" cy="42" r="2" fill="#e24b4a"/><circle cx="42" cy="42" r="2" fill="#4a72c3"/><text x="30" y="28" text-anchor="middle" fill="#f7c77e" font-size="9" font-weight="bold">SOLÁR</text></svg>`,
   'vlnovec': `<svg viewBox="0 0 60 32"><path d="M 4 16 Q 10 8, 16 16 T 28 16 T 40 16 T 52 16 L 56 16" fill="none" stroke="#7eb8f7" stroke-width="2.5"/><circle cx="4" cy="16" r="2" fill="#7eb8f7"/><circle cx="56" cy="16" r="2" fill="#7eb8f7"/></svg>`,
   'expanzni-nadoba': `<svg viewBox="0 0 40 48"><ellipse cx="20" cy="24" rx="14" ry="20" fill="none" stroke="#e24b4a" stroke-width="2.5"/><line x1="20" y1="4" x2="20" y2="0" stroke="#7eb8f7" stroke-width="3"/><circle cx="20" cy="0" r="2" fill="#7eb8f7"/><text x="20" y="28" text-anchor="middle" fill="#4a5580" font-size="8">EXP</text></svg>`,
+  'pojistna-soustava': `<svg viewBox="0 0 70 120"><line x1="35" y1="10" x2="35" y2="110" stroke="#e24b4a" stroke-width="8" stroke-linecap="round"/><line x1="35" y1="0" x2="35" y2="10" stroke="#7eb8f7" stroke-width="4" stroke-linecap="round"/></svg>`,
 };
 
 const DN_OPTIONS = ['DN15','DN20','DN25','DN32','DN40','DN50','DN65','DN80','DN100'];
@@ -297,6 +308,7 @@ const SVG_SIZES = {
   'solarni-kolektor': {w:60,h:48},
   'vlnovec': {w:60,h:32},
   'expanzni-nadoba': {w:40,h:48},
+  'pojistna-soustava': {w:70,h:120},
 };
 
 const PORT_DEFINITIONS = {
@@ -323,6 +335,7 @@ const PORT_DEFINITIONS = {
   'uzaviraci-shoupe': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0}],
   'vypousteni': [{x:0,y:-8,angle:90}],
   'expanzni-nadoba': [{x:0,y:-24,angle:90}],
+  'pojistna-soustava': [],
   'odvzdusnovaci': [{x:0,y:4,angle:270}],
   'odvzdusnovaci-auto': [{x:0,y:8,angle:270}],
   'pojistny-ventil': [{x:-20,y:0,angle:180},{x:20,y:0,angle:0}],
@@ -375,6 +388,7 @@ const COMPONENTS = [
   {id:'expanzni-nadoba',name:'Expanzní nádoba'},
   {id:'akumul',name:'Aku nádoba'},{id:'tuv',name:'TUV nádoba'},
   {id:'podlahovy-rozdelovac',name:'Podlahový rozdělovač'},
+  {id:'pojistna-soustava',name:'Pojistná soustava'},
   {id:'otopne-teleso',name:'Otopné těleso'},{id:'registr',name:'Otopný registr'},
   {id:'konvektor',name:'Podlahový konvektor'},{id:'podlahove-topeni-spirala',name:'Podl. topení spirála'},
   {id:'podlahove-topeni-meandr',name:'Podl. topení meandr'},{id:'radiator',name:'Radiátor'},
@@ -406,6 +420,7 @@ let drawStartPortIdx = null;
 let isDrawing = false;
 let dragNodePipeId = null;
 let dragNodeIdx = null;
+let gridSize = 10; // Configurable grid size
 
 const canvas = document.getElementById('canvas');
 const connSvg = document.getElementById('connections');
@@ -423,6 +438,15 @@ function toCanvas(sx, sy) {
 // ===== INIT =====
 function init() {
   buildSidebar();
+  
+  // Load grid size setting
+  const savedGridSize = localStorage.getItem(GRID_SIZE_KEY);
+  if(savedGridSize) {
+    gridSize = parseInt(savedGridSize);
+    const gridSelect = document.getElementById('grid-size-select');
+    if(gridSelect) gridSelect.value = gridSize;
+  }
+  
   drawGrid();
   setupCanvasEvents();
   
@@ -471,7 +495,10 @@ function buildSidebar() {
 }
 
 // Snap to grid - 10px for fine alignment (half of minor grid line)
-function snapToGrid(v, g=10) { return Math.round(v/g)*g; }
+function snapToGrid(v, g=null) { 
+  const gridStep = g !== null ? g : gridSize;
+  return Math.round(v/gridStep)*gridStep; 
+}
 
 // Generate dynamic SVG for floor heating distributor based on circuits
 function generateDistributorSVG(circuits) {
@@ -490,6 +517,22 @@ function getDistributorSize(circuits) {
   circuits = circuits || 4;
   const height = 40 + circuits * 12;
   return {w: 70, h: height};
+}
+
+// Generate dynamic SVG for safety system (pojistna soustava)
+function generateSafetySystemSVG() {
+  const height = 120;
+  const width = 70;
+  
+  return `<svg viewBox="0 0 ${width} ${height}">
+    <line x1="35" y1="10" x2="35" y2="110" stroke="#e24b4a" stroke-width="8" stroke-linecap="round"/>
+    <line x1="35" y1="0" x2="35" y2="10" stroke="#7eb8f7" stroke-width="4" stroke-linecap="round"/>
+  </svg>`;
+}
+
+// Get size for safety system
+function getSafetySystemSize() {
+  return {w: 70, h: 120};
 }
 
 // Constrain point to horizontal or vertical line from prevPoint (for Shift+drag)
@@ -513,11 +556,11 @@ function drawGrid() {
   const ctx = gc.getContext('2d');
   ctx.clearRect(0,0,gc.width,gc.height);
   ctx.strokeStyle='#1f2540'; ctx.lineWidth=0.5;
-  const sp=20*zoom, ox=panX%sp, oy=panY%sp;
+  const sp=gridSize*2*zoom, ox=panX%sp, oy=panY%sp;
   for(let x=ox;x<gc.width;x+=sp){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,gc.height);ctx.stroke();}
   for(let y=oy;y<gc.height;y+=sp){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(gc.width,y);ctx.stroke();}
   ctx.strokeStyle='#262c50'; ctx.lineWidth=1;
-  const bs=100*zoom, ox2=panX%bs, oy2=panY%bs;
+  const bs=gridSize*10*zoom, ox2=panX%bs, oy2=panY%bs;
   for(let x=ox2;x<gc.width;x+=bs){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,gc.height);ctx.stroke();}
   for(let y=oy2;y<gc.height;y+=bs){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(gc.width,y);ctx.stroke();}
 }
@@ -788,6 +831,14 @@ function addElement(type, name, category, x, y) {
     el.ports.push({side:'nahore',pos:50,label:'Přívod',dn:'DN25',type:'teple'});
     el.ports.push({side:'dole',pos:50,label:'Návrat',dn:'DN25',type:'studene'});
   }
+  if(type==='pojistna-soustava') {
+    el.ports=[
+      {side:'nahore',pos:50,label:'Přívod',dn:'DN25'},
+      {side:'vlevo',pos:25,label:'Expanzka',dn:'DN25'},
+      {side:'vlevo',pos:50,label:'Pojistný ventil',dn:'DN20'},
+      {side:'vlevo',pos:75,label:'Odvzdušňovák',dn:'DN15'}
+    ];
+  }
   elements.push(el);
   renderElement(el);
   selectElement(id);
@@ -801,8 +852,8 @@ function renderElement(el) {
 
   const wrap=document.createElement('div');
   wrap.className='canvas-el'+(selectedId==el.id?' selected':'');
-  // Add multi-port class for elements with many ports (akumul, TUV, rozdelovac)
-  const isMultiPort = (el.ports && el.ports.length>2) || el.type==='podlahovy-rozdelovac';
+  // Add multi-port class for elements with many ports (akumul, TUV, rozdelovac, pojistna-soustava)
+  const isMultiPort = (el.ports && el.ports.length>2) || el.type==='podlahovy-rozdelovac' || el.type==='pojistna-soustava';
   if(isMultiPort) {
     wrap.className+=' multi-port';
     wrap.style.zIndex='100'; // Multi-port elements always on top
@@ -915,6 +966,8 @@ function renderElement(el) {
       // For podlahovy-rozdelovac, generate dynamic SVG
       if(el.type === 'podlahovy-rozdelovac') {
         svgWrap.innerHTML = generateDistributorSVG(el.circuits);
+      } else if(el.type === 'pojistna-soustava') {
+        svgWrap.innerHTML = generateSafetySystemSVG();
       } else {
         svgWrap.innerHTML = SVGS[el.type]||'';
       }
@@ -923,16 +976,16 @@ function renderElement(el) {
       svgWrap.style.transformOrigin='center center';
       
       // For podlahovy-rozdelovac, get dynamic size
-      const svgSize = el.type === 'podlahovy-rozdelovac' ? getDistributorSize(el.circuits) : (SVG_SIZES[el.type]||{w:48,h:48});
+      const svgSize = el.type === 'podlahovy-rozdelovac' ? getDistributorSize(el.circuits) : (el.type === 'pojistna-soustava' ? getSafetySystemSize() : (SVG_SIZES[el.type]||{w:48,h:48}));
       
       const svgEl=svgWrap.querySelector('svg');
       if(svgEl){svgEl.setAttribute('width',svgSize.w);svgEl.setAttribute('height',svgSize.h);}
       box.appendChild(svgWrap);
 
-      // Add ports - pro akumul/TUV/rozdelovac z el.ports pole
-      if((el.type==='akumul'||el.type==='tuv'||el.type==='podlahovy-rozdelovac') && el.ports && el.ports.length>0) {
-        // For podlahovy-rozdelovac, get dynamic size
-        const svgSize = el.type === 'podlahovy-rozdelovac' ? getDistributorSize(el.circuits) : (SVG_SIZES[el.type]||{w:48,h:48});
+      // Add ports - pro akumul/TUV/rozdelovac/pojistna-soustava z el.ports pole
+      if((el.type==='akumul'||el.type==='tuv'||el.type==='podlahovy-rozdelovac'||el.type==='pojistna-soustava') && el.ports && el.ports.length>0) {
+        // For podlahovy-rozdelovac and pojistna-soustava, get dynamic size
+        const svgSize = el.type === 'podlahovy-rozdelovac' ? getDistributorSize(el.circuits) : (el.type === 'pojistna-soustava' ? getSafetySystemSize() : (SVG_SIZES[el.type]||{w:48,h:48}));
         const centerX=svgSize.w/2;
         const centerY=svgSize.h/2;
         
@@ -1095,14 +1148,27 @@ function renderElement(el) {
 }
 
 function removeElement(id) {
+  const el = elements.find(e => e.id === id);
+  
+  // Pokud mažeme trubku přímo, odstranit její label a waypointy
+  if(el && el.type === 'drawn-pipe') {
+    ['el-','label-'].forEach(pre=>{const d=document.getElementById(pre+id);if(d)d.remove();});
+    document.querySelectorAll(`.path-node[data-pipe-id="${id}"]`).forEach(n=>n.remove());
+  }
+  
+  // Najít a odstranit všechny připojené trubky (pokud mažeme komponentu)
   const connectedPipes=elements.filter(e=>e.type==='drawn-pipe'&&(e.fromEl===id||e.toEl===id));
   connectedPipes.forEach(pipe=>{
     ['el-','label-'].forEach(pre=>{const d=document.getElementById(pre+pipe.id);if(d)d.remove();});
     document.querySelectorAll(`.path-node[data-pipe-id="${pipe.id}"]`).forEach(n=>n.remove());
   });
   elements=elements.filter(e=>e.id!==id&&!(e.type==='drawn-pipe'&&(e.fromEl===id||e.toEl===id)));
-  const domEl=document.getElementById('el-'+id);
-  if(domEl) domEl.remove();
+  
+  // Odstranit DOM element (pro ne-trubky)
+  if(!el || el.type !== 'drawn-pipe') {
+    const domEl=document.getElementById('el-'+id);
+    if(domEl) domEl.remove();
+  }
   
   // Odstranit element ze v\u0161ech sestav
   assemblies.forEach(asm => {
@@ -1299,6 +1365,23 @@ function renderProps(id) {
   
   if(el.type==='podlahovy-rozdelovac') {
     html+=`<div class="prop-row"><div class="prop-label">Počet okruhů</div><input class="prop-input" type="number" min="1" max="12" value="${el.circuits||4}" oninput="updateCircuits(${id},parseInt(this.value))"></div>`;
+  }
+  
+  // Pojistná soustava - správa portů
+  if(el.type==='pojistna-soustava') {
+    html+=`<div style="border-top:1px solid #2a3050;margin-top:12px;padding-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:11px;color:#6878a8;font-weight:600">PŘIPOJENÍ</span>
+      </div>`;
+    
+    (el.ports||[]).forEach((p,i)=>{
+      html+=`<div style="display:flex;gap:4px;margin-bottom:6px;align-items:center;background:#1a1f2e;padding:6px;border-radius:4px;font-size:11px">
+        <span style="flex:1;color:#c0c8e8">${p.label}</span>
+        <select style="width:70px;font-size:10px;padding:4px" onchange="updatePortProp(${id},${i},'dn',this.value)">${DN_OPTIONS.map(d=>`<option ${p.dn===d?'selected':''}>${d}</option>`).join('')}</select>
+      </div>`;
+    });
+    
+    html+=`</div>`;
   }
   
   html+=`<div style="margin-top:12px"><button class="btn danger" style="width:100%" onclick="removeElement(${id})">🗑 Smazat</button></div>`;
@@ -1506,8 +1589,8 @@ function getPortWorldPosition(elId, portIdx) {
   }
 
   // FALLBACK: Calculate position (for ports that may not be rendered)
-  // For podlahovy-rozdelovac, get dynamic size
-  const svgSize = el.type === 'podlahovy-rozdelovac' ? getDistributorSize(el.circuits) : (SVG_SIZES[el.type]||{w:48,h:48});
+  // For podlahovy-rozdelovac and pojistna-soustava, get dynamic size
+  const svgSize = el.type === 'podlahovy-rozdelovac' ? getDistributorSize(el.circuits) : (el.type === 'pojistna-soustava' ? getSafetySystemSize() : (SVG_SIZES[el.type]||{w:48,h:48}));
   const svgWrap=dom.querySelector('.el-svg-wrap');
   
   // For tanks (akumul/TUV) with el.ports array but without svgWrap
@@ -2275,6 +2358,7 @@ const AUTOSAVE_KEY = 'otopna_soustava_autosave';
 const PROJECTS_KEY = 'otopna_soustava_projects';
 const AUTOSAVE_INTERVAL_KEY = 'otopna_soustava_autosave_interval';
 const PRICE_LIST_KEY = 'otopna_soustava_prices';
+const GRID_SIZE_KEY = 'otopna_soustava_grid_size';
 let autoSaveTimeout = null;
 let autoSaveIntervalId = null;
 let autoSaveIntervalSeconds = 300; // Default 5 minutes
@@ -2319,6 +2403,12 @@ function setAutoSaveInterval(seconds) {
       status.style.color = '#f7c77e';
     }
   }
+}
+
+function setGridSize(size) {
+  gridSize = parseInt(size);
+  localStorage.setItem(GRID_SIZE_KEY, gridSize);
+  drawGrid(); // Redraw grid with new size
 }
 
 // Perform autosave
